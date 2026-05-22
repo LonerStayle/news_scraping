@@ -1,0 +1,29 @@
+# macOS
+.DS_Store
+
+# OS / editor
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# logs / temp
+*.log
+*.tmp
+
+# env / secrets
+.env
+.env.*
+!.env.example
+
+# python
+__pycache__/
+*.pyc
+.venv/
+.uv/
+
+# node
+node_modules/
+.npm/
+.pnpm-store/
