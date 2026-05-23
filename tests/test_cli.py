@@ -10,6 +10,13 @@ from ai_news_scraping.config import Settings
 from ai_news_scraping.domain_config import DomainConfig, Source
 from ai_news_scraping.pipeline import PipelineDeps, PipelineParams, PipelineResult
 from ai_news_scraping.scrape_state_store import InMemoryScrapeStateStore
+from ai_news_scraping.search_config_loader import LoadedConfig
+from ai_news_scraping.search_config_store import (
+    InMemoryKeywordStore,
+    InMemorySettingsStore,
+    InMemorySourceStore,
+    SearchSettings,
+)
 from ai_news_scraping.store import InMemoryArticleStore
 from ai_news_scraping.subscriber_store import InMemorySubscriberStore
 
@@ -38,6 +45,21 @@ def _make_domain() -> DomainConfig:
     )
 
 
+def _make_loaded(
+    *,
+    keywords: list[str] | None = None,
+    domains: list[str] | None = None,
+    name_map: dict[str, str] | None = None,
+    settings: SearchSettings | None = None,
+) -> LoadedConfig:
+    return LoadedConfig(
+        keywords=keywords if keywords is not None else ["kw1", "kw2"],
+        source_domains=domains if domains is not None else ["a.com", "b.com"],
+        source_name_map=name_map if name_map is not None else {"a.com": "A", "b.com": "B"},
+        settings=settings if settings is not None else SearchSettings(),
+    )
+
+
 def _ok_result() -> PipelineResult:
     now = datetime(2026, 5, 23, 0, 40, 0, tzinfo=UTC)
     return PipelineResult(
@@ -53,6 +75,12 @@ def _ok_result() -> PipelineResult:
         refused={},
         status="success",
     )
+
+
+def _make_search_stores() -> tuple[
+    InMemoryKeywordStore, InMemorySourceStore, InMemorySettingsStore
+]:
+    return InMemoryKeywordStore(), InMemorySourceStore(), InMemorySettingsStore()
 
 
 # ────────── _parse_args ──────────
@@ -79,20 +107,60 @@ def test_parse_args_missing_command() -> None:
 # ────────── build_params ──────────
 
 
-def test_build_params_maps_fields() -> None:
+def test_build_params_maps_fields_from_loaded_config() -> None:
     params = cli.build_params(
         settings=_make_settings(),
-        domain_cfg=_make_domain(),
+        loaded=_make_loaded(),
         subscribers=["x@x.com", "y@x.com"],
         dry_run=True,
     )
     assert params.keywords == ["kw1", "kw2"]
     assert params.source_domains == ["a.com", "b.com"]
+    assert params.source_name_map == {"a.com": "A", "b.com": "B"}
     assert params.subscribers == ["x@x.com", "y@x.com"]
     assert params.brave_search_api_key == "BSK"
     assert params.gemini_model == "gemini-2.5-flash"
     assert params.gmail_password == "P"
     assert params.dry_run is True
+
+
+def test_build_params_uses_settings_overrides() -> None:
+    params = cli.build_params(
+        settings=_make_settings(),
+        loaded=_make_loaded(
+            settings=SearchSettings(
+                freshness="pm",
+                num_results_per_keyword=15,
+                max_articles_for_summary=30,
+                min_body_len=400,
+            )
+        ),
+        subscribers=["x@x.com"],
+        dry_run=False,
+    )
+    assert params.freshness == "pm"
+    assert params.num_results_per_keyword == 15
+    assert params.max_articles_for_summary == 30
+
+
+# ────────── seed_search_config ──────────
+
+
+def test_seed_imports_yaml_when_db_empty() -> None:
+    kw, src, _ = _make_search_stores()
+    cli.seed_search_config(kw, src, _make_domain())
+    assert kw.list_active() == ["kw1", "kw2"]
+    assert [r.domain for r in src.list_active()] == ["a.com", "b.com"]
+
+
+def test_seed_idempotent_when_db_not_empty() -> None:
+    kw, src, _ = _make_search_stores()
+    kw.add("existing")
+    src.add("existing.com", "Existing")
+    cli.seed_search_config(kw, src, _make_domain())
+    # yaml seed 가 추가되지 않음 — 기존 그대로
+    assert kw.list_active() == ["existing"]
+    assert [r.domain for r in src.list_active()] == ["existing.com"]
 
 
 # ────────── run_command ──────────
@@ -103,6 +171,9 @@ def test_run_command_happy_path() -> None:
     sub_store.add("x@x.com")
     scrape_store = InMemoryScrapeStateStore(initial=True)
     article_store = InMemoryArticleStore()
+    kw, src, settings = _make_search_stores()
+    kw.bulk_seed(["db-kw"])
+    src.add("db.com", "DB")
     captured: dict[str, Any] = {}
 
     def fake_runner(params: PipelineParams, deps: PipelineDeps) -> PipelineResult:
@@ -116,19 +187,49 @@ def test_run_command_happy_path() -> None:
         article_store=article_store,
         sub_store=sub_store,
         scrape_store=scrape_store,
+        keyword_store=kw,
+        source_store=src,
+        settings_store=settings,
         dry_run=False,
         pipeline_runner=fake_runner,
     )
     assert rc == 0
-    assert captured["params"].subscribers == ["x@x.com"]
-    assert captured["params"].dry_run is False
+    assert captured["params"].keywords == ["db-kw"]  # DB 우선
+    assert captured["params"].source_domains == ["db.com"]
     assert captured["deps"].store is article_store
+
+
+def test_run_command_uses_yaml_fallback_when_db_empty() -> None:
+    sub_store = InMemorySubscriberStore()
+    sub_store.add("x@x.com")
+    kw, src, settings = _make_search_stores()
+    captured: dict[str, Any] = {}
+
+    def fake_runner(params: PipelineParams, deps: PipelineDeps) -> PipelineResult:
+        captured["params"] = params
+        return _ok_result()
+
+    cli.run_command(
+        settings=_make_settings(),
+        domain_cfg=_make_domain(),
+        article_store=InMemoryArticleStore(),
+        sub_store=sub_store,
+        scrape_store=InMemoryScrapeStateStore(initial=True),
+        keyword_store=kw,
+        source_store=src,
+        settings_store=settings,
+        dry_run=False,
+        pipeline_runner=fake_runner,
+    )
+    assert captured["params"].keywords == ["kw1", "kw2"]
+    assert captured["params"].source_domains == ["a.com", "b.com"]
 
 
 def test_run_command_skips_when_scrape_disabled() -> None:
     sub_store = InMemorySubscriberStore()
     sub_store.add("x@x.com")
     scrape_store = InMemoryScrapeStateStore(initial=False)
+    kw, src, settings = _make_search_stores()
     called: list[str] = []
 
     def fake_runner(p: PipelineParams, d: PipelineDeps) -> PipelineResult:
@@ -141,16 +242,20 @@ def test_run_command_skips_when_scrape_disabled() -> None:
         article_store=InMemoryArticleStore(),
         sub_store=sub_store,
         scrape_store=scrape_store,
+        keyword_store=kw,
+        source_store=src,
+        settings_store=settings,
         dry_run=False,
         pipeline_runner=fake_runner,
     )
     assert rc == 0
-    assert called == []  # pipeline never invoked
+    assert called == []
 
 
 def test_run_command_dry_run_bypasses_scrape_gate() -> None:
     sub_store = InMemorySubscriberStore()
-    scrape_store = InMemoryScrapeStateStore(initial=False)  # OFF
+    scrape_store = InMemoryScrapeStateStore(initial=False)
+    kw, src, settings = _make_search_stores()
     called: list[str] = []
 
     def fake_runner(p: PipelineParams, d: PipelineDeps) -> PipelineResult:
@@ -164,6 +269,9 @@ def test_run_command_dry_run_bypasses_scrape_gate() -> None:
         article_store=InMemoryArticleStore(),
         sub_store=sub_store,
         scrape_store=scrape_store,
+        keyword_store=kw,
+        source_store=src,
+        settings_store=settings,
         dry_run=True,
         pipeline_runner=fake_runner,
     )
@@ -172,18 +280,25 @@ def test_run_command_dry_run_bypasses_scrape_gate() -> None:
 
 
 def test_run_command_skips_when_no_subscribers_and_not_dry_run() -> None:
-    sub_store = InMemorySubscriberStore()  # empty
-    scrape_store = InMemoryScrapeStateStore(initial=True)
+    sub_store = InMemorySubscriberStore()
+    kw, src, settings = _make_search_stores()
     called: list[str] = []
+
+    def fake_runner(p: PipelineParams, d: PipelineDeps) -> PipelineResult:
+        called.append("ran")
+        return _ok_result()
 
     rc = cli.run_command(
         settings=_make_settings(),
         domain_cfg=_make_domain(),
         article_store=InMemoryArticleStore(),
         sub_store=sub_store,
-        scrape_store=scrape_store,
+        scrape_store=InMemoryScrapeStateStore(initial=True),
+        keyword_store=kw,
+        source_store=src,
+        settings_store=settings,
         dry_run=False,
-        pipeline_runner=lambda p, d: called.append("ran") or _ok_result(),  # type: ignore[func-returns-value]
+        pipeline_runner=fake_runner,
     )
     assert rc == 0
     assert called == []
@@ -192,6 +307,7 @@ def test_run_command_skips_when_no_subscribers_and_not_dry_run() -> None:
 def test_run_command_failed_status_returns_1() -> None:
     sub_store = InMemorySubscriberStore()
     sub_store.add("x@x.com")
+    kw, src, settings = _make_search_stores()
     now = datetime(2026, 5, 23, 0, 40, 0, tzinfo=UTC)
 
     def fake_runner(p: PipelineParams, d: PipelineDeps) -> PipelineResult:
@@ -215,6 +331,9 @@ def test_run_command_failed_status_returns_1() -> None:
         article_store=InMemoryArticleStore(),
         sub_store=sub_store,
         scrape_store=InMemoryScrapeStateStore(initial=True),
+        keyword_store=kw,
+        source_store=src,
+        settings_store=settings,
         dry_run=False,
         pipeline_runner=fake_runner,
     )
@@ -224,6 +343,7 @@ def test_run_command_failed_status_returns_1() -> None:
 def test_run_command_settings_dry_run_flag_overrides_cli() -> None:
     sub_store = InMemorySubscriberStore()
     scrape_store = InMemoryScrapeStateStore(initial=False)
+    kw, src, settings = _make_search_stores()
     seen: dict[str, Any] = {}
 
     def fake_runner(p: PipelineParams, d: PipelineDeps) -> PipelineResult:
@@ -236,7 +356,10 @@ def test_run_command_settings_dry_run_flag_overrides_cli() -> None:
         article_store=InMemoryArticleStore(),
         sub_store=sub_store,
         scrape_store=scrape_store,
-        dry_run=False,  # CLI flag False, but settings.dry_run=True wins
+        keyword_store=kw,
+        source_store=src,
+        settings_store=settings,
+        dry_run=False,
         pipeline_runner=fake_runner,
     )
     assert rc == 0
