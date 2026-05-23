@@ -1,0 +1,53 @@
+name: Daily AI News Digest
+
+# 매일 08:40 KST (= 전날 23:40 UTC) + 수동 트리거.
+# GitHub Actions cron 은 정시 ± 최대 15분 지연 가능 — 발송 윈도우 (±30분) 안.
+on:
+  schedule:
+    - cron: "40 23 * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Run pipeline but skip mail send"
+        type: boolean
+        default: false
+
+# 같은 워크플로우 중복 실행 방지 (장시간 실행 케이스 보호).
+concurrency:
+  group: daily-digest
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  digest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GOOGLE_CSE_API_KEY: ${{ secrets.GOOGLE_CSE_API_KEY }}
+      GOOGLE_CSE_CX: ${{ secrets.GOOGLE_CSE_CX }}
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      GEMINI_MODEL: ${{ vars.GEMINI_MODEL || 'gemini-2.5-flash' }}
+      GMAIL_USER: ${{ secrets.GMAIL_USER }}
+      GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      ADMIN_TOKEN: ${{ secrets.ADMIN_TOKEN }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: "latest"
+          enable-cache: true
+
+      - name: Sync dependencies
+        run: uv sync --frozen
+
+      - name: Run digest
+        env:
+          DRY_RUN_FLAG: ${{ github.event.inputs.dry_run == 'true' && '--dry-run' || '' }}
+        run: uv run python -m ai_news_scraping.cli run $DRY_RUN_FLAG
