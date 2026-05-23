@@ -26,6 +26,7 @@ from . import mail as mail_mod
 from . import search as search_mod
 from . import summarize as summarize_mod
 from .extract import ExtractedArticle, ExtractionError
+from .run_store import RunStore
 from .search import SearchResult
 from .store import ArticleStore
 from .summarize import SummaryInput, SummaryOutput
@@ -71,6 +72,8 @@ class PipelineDeps:
     summarize_fn: SummarizeFn = field(default=summarize_mod.summarize)
     send_mail_fn: SendMailFn = field(default=mail_mod.send_digest)
     now_fn: Callable[[], datetime] = field(default=_utc_now)
+    # 발송 이력 영속화. None 이면 in-memory only (테스트 / dry run 편의).
+    run_store: RunStore | None = None
 
 
 @dataclass(frozen=True)
@@ -90,8 +93,41 @@ class PipelineResult:
 
 
 def run(params: PipelineParams, deps: PipelineDeps) -> PipelineResult:
-    run_id = str(uuid.uuid4())
-    started_at = deps.now_fn()
+    # run_store 가 있으면 거기서 run_id + started_at 받고 status=running 으로
+    # 시작 기록. 없으면 in-memory uuid 만 사용.
+    if deps.run_store is not None:
+        rec = deps.run_store.start_run()
+        run_id = rec.run_id
+        started_at = rec.started_at
+    else:
+        run_id = str(uuid.uuid4())
+        started_at = deps.now_fn()
+
+    try:
+        result = _run_inner(params, deps, run_id, started_at)
+    except Exception as e:
+        if deps.run_store is not None:
+            deps.run_store.mark_finished(
+                run_id, status="failed", article_count=0, error=str(e)
+            )
+        raise
+
+    if deps.run_store is not None:
+        deps.run_store.mark_finished(
+            run_id,
+            status=result.status,
+            article_count=result.article_count,
+            digest_text=result.digest_markdown or None,
+        )
+    return result
+
+
+def _run_inner(
+    params: PipelineParams,
+    deps: PipelineDeps,
+    run_id: str,
+    started_at: datetime,
+) -> PipelineResult:
 
     # ───── 1) 검색 ─────
     raw_results: list[SearchResult] = []

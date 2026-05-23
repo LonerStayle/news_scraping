@@ -321,6 +321,68 @@ def test_run_caps_summary_input_at_max_articles() -> None:
 # ────────── mail refused ──────────
 
 
+# ────────── G3: RunStore wiring ──────────
+
+
+def test_run_records_to_run_store_on_success() -> None:
+    from ai_news_scraping.run_store import InMemoryRunStore
+
+    search_fn = FakeSearchFn(by_keyword={"kw1": [_result_factory("https://a.com/1", "kw1")]})
+    rs = InMemoryRunStore()
+    deps, _ = _make_deps(search_fn=search_fn)
+    deps.run_store = rs
+    result = run(_params(), deps)
+
+    assert result.status == "success"
+    recent = rs.list_recent()
+    assert len(recent) == 1
+    rec = recent[0]
+    assert rec.run_id == result.run_id  # pipeline 이 run_store 의 id 사용
+    assert rec.status == "success"
+    assert rec.article_count == 1
+    assert rec.digest_text is not None
+
+
+def test_run_records_skipped_when_no_articles() -> None:
+    from ai_news_scraping.run_store import InMemoryRunStore
+
+    search_fn = FakeSearchFn(by_keyword={"kw1": [_result_factory("https://a.com/x", "kw1")]})
+    extract_fn = FakeExtractFn(raise_on={"https://a.com/x"})
+    rs = InMemoryRunStore()
+    deps, _ = _make_deps(search_fn=search_fn, extract_fn=extract_fn)
+    deps.run_store = rs
+    result = run(_params(), deps)
+
+    assert result.status == "skipped"
+    rec = rs.list_recent()[0]
+    assert rec.status == "skipped"
+    assert rec.article_count == 0
+
+
+def test_run_records_failed_on_exception() -> None:
+    from ai_news_scraping.run_store import InMemoryRunStore
+
+    rs = InMemoryRunStore()
+    # pipeline.py 의 search 는 keyword 별로 try/except 가 있어서 crash 안 함.
+    # 더 명확한 시나리오: summarize_fn 이 던지면 _run_inner 가 던지고 run() 이 catch.
+    search_fn = FakeSearchFn(by_keyword={"kw1": [_result_factory("https://a.com/1", "kw1")]})
+
+    class BrokenSummarize:
+        def __call__(self, *args: Any, **kw: Any) -> Any:
+            raise RuntimeError("gemini down")
+
+    deps, _ = _make_deps(search_fn=search_fn, summarize_fn=BrokenSummarize())
+    deps.run_store = rs
+
+    import pytest as _pytest
+    with _pytest.raises(RuntimeError, match="gemini down"):
+        run(_params(), deps)
+
+    rec = rs.list_recent()[0]
+    assert rec.status == "failed"
+    assert rec.error is not None and "gemini" in rec.error
+
+
 def test_run_records_refused_recipients() -> None:
     search_fn = FakeSearchFn(by_keyword={"kw1": [_result_factory("https://a.com/1", "kw1")]})
     send_mail_fn = FakeSendMailFn(accepted=["good@x.com"], refused={"bad@x.com": "550 unknown"})
