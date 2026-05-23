@@ -5,202 +5,449 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>ai_news_scraping admin</title>
   <style>
+    :root {
+      --bg: #fafbfc;
+      --card-bg: #ffffff;
+      --fg: #1f2328;
+      --muted: #57606a;
+      --accent: #0969da;
+      --accent-soft: #ddf4ff;
+      --border: #d0d7de;
+      --green: #1a7f37;
+      --red: #cf222e;
+    }
+    * { box-sizing: border-box; }
     body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      max-width: 720px;
-      margin: 2rem auto;
-      padding: 0 1rem;
-      color: #1f2328;
+      font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo",
+                   "Segoe UI", "Noto Sans KR", Roboto, sans-serif;
+      color: var(--fg);
+      background: var(--bg);
+      max-width: 920px;
+      margin: 0 auto;
+      padding: 2rem 1.5rem 6rem;
       line-height: 1.55;
     }
-    h1 { font-size: 1.4rem; margin: 0 0 1.5rem; }
-    h2 { font-size: 1.1rem; margin-top: 2rem; }
-    .toggle-box {
-      padding: 1rem 1.25rem;
-      border: 1px solid #d0d7de;
-      border-radius: 8px;
+    h1 { font-size: 1.5rem; margin: 0 0 0.3rem; }
+    h2 { font-size: 1.15rem; margin: 0 0 1rem; }
+    .subtitle { color: var(--muted); margin: 0 0 1.5rem; font-size: 0.95rem; }
+
+    /* Tabs */
+    nav.tabs {
+      display: flex;
+      gap: 0.25rem;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 1.5rem;
+      overflow-x: auto;
+    }
+    .tab {
+      background: none;
+      border: none;
+      color: var(--muted);
+      padding: 0.7rem 1.1rem;
+      font-size: 0.95rem;
+      font-weight: 500;
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      white-space: nowrap;
+      font-family: inherit;
+      transition: color 0.15s, border-color 0.15s;
+    }
+    .tab:hover { color: var(--fg); }
+    .tab.active {
+      color: var(--accent);
+      border-bottom-color: var(--accent);
+    }
+    .tab .count {
+      display: inline-block;
+      background: var(--border);
+      color: var(--fg);
+      padding: 0.05em 0.5em;
+      border-radius: 999px;
+      font-size: 0.78em;
+      margin-left: 0.4em;
+    }
+    .tab.active .count { background: var(--accent-soft); color: var(--accent); }
+
+    .panel { display: none; animation: fadeIn 0.2s; }
+    .panel.active { display: block; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
+    /* Cards */
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1.1rem 1.3rem;
+      margin-bottom: 1rem;
+    }
+    .card-row {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      background: #f6f8fa;
+      gap: 1rem;
     }
-    .state-on  { color: #1a7f37; font-weight: 600; }
-    .state-off { color: #cf222e; font-weight: 600; }
-    button {
-      padding: 0.45rem 1rem;
+    .state-on  { color: var(--green); font-weight: 600; }
+    .state-off { color: var(--red);   font-weight: 600; }
+
+    /* Buttons */
+    button, .btn {
+      padding: 0.45rem 0.95rem;
       border-radius: 6px;
       border: 1px solid #888;
       background: #fff;
       cursor: pointer;
       font-size: 0.9rem;
+      font-family: inherit;
     }
-    button.danger  { color: #cf222e; border-color: #cf222e; }
-    button.primary { background: #0969da; color: #fff; border-color: #0969da; }
+    button:hover { background: #f6f8fa; }
+    button.primary {
+      background: var(--accent);
+      color: #fff;
+      border-color: var(--accent);
+    }
+    button.primary:hover { background: #0860c6; }
+    button.danger { color: var(--red); border-color: var(--red); }
+    button.danger:hover { background: #ffeded; }
+
     form.inline { display: inline; margin: 0; }
-    table { width: 100%; border-collapse: collapse; margin-top: 0.75rem; }
-    th, td { padding: 0.55rem 0.5rem; border-bottom: 1px solid #eaeef2; text-align: left; }
-    th { font-size: 0.85rem; color: #57606a; font-weight: 500; }
-    input[type=email] {
-      padding: 0.45rem 0.6rem;
-      width: 280px;
-      border: 1px solid #d0d7de;
+
+    /* Forms */
+    .add-form {
+      display: flex;
+      gap: 0.5rem;
+      margin: 1rem 0;
+      flex-wrap: wrap;
+    }
+    .add-form input {
+      flex: 1;
+      min-width: 200px;
+      padding: 0.45rem 0.7rem;
+      border: 1px solid var(--border);
       border-radius: 6px;
       font-size: 0.95rem;
+      font-family: inherit;
     }
-    .add-form { margin-top: 0.75rem; display: flex; gap: 0.5rem; }
-    .empty { color: #57606a; font-style: italic; padding: 0.75rem 0; }
+    .settings-form {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem 1.5rem;
+      margin: 1rem 0;
+    }
+    .settings-form .field { display: flex; flex-direction: column; gap: 0.3rem; }
+    .settings-form label {
+      font-weight: 600;
+      font-size: 0.88rem;
+      color: var(--fg);
+    }
+    .settings-form .hint {
+      font-size: 0.78rem;
+      color: var(--muted);
+      margin-top: 0.1rem;
+    }
+    .settings-form input,
+    .settings-form select {
+      padding: 0.45rem 0.7rem;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-size: 0.95rem;
+      font-family: inherit;
+      background: #fff;
+    }
+    @media (max-width: 640px) {
+      .settings-form { grid-template-columns: 1fr; }
+    }
+
+    /* Tables */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 0.75rem;
+      font-size: 0.92rem;
+    }
+    th, td {
+      padding: 0.55rem 0.55rem;
+      border-bottom: 1px solid #eaeef2;
+      text-align: left;
+    }
+    th {
+      background: #f6f8fa;
+      font-size: 0.82rem;
+      color: var(--muted);
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .empty {
+      color: var(--muted);
+      font-style: italic;
+      padding: 1.2rem 0;
+      text-align: center;
+    }
+
+    /* Toast for hash-restoration */
+    .hash-hint {
+      position: fixed;
+      bottom: 1rem;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--fg);
+      color: #fff;
+      padding: 0.5rem 1rem;
+      border-radius: 6px;
+      font-size: 0.85rem;
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+    .hash-hint.show { opacity: 0.9; }
   </style>
 </head>
 <body>
   <h1>ai_news_scraping admin</h1>
+  <p class="subtitle">매일 아침 발송 / 검색 조건 / 구독자 명단 관리</p>
 
-  <div class="toggle-box">
-    <div>
-      자동 스크래핑 상태:
-      {% if scrape_enabled %}
-        <span class="state-on">ON</span>
-      {% else %}
-        <span class="state-off">OFF</span>
-      {% endif %}
+  <nav class="tabs" id="tabs">
+    <button class="tab active" data-panel="overview">Overview</button>
+    <button class="tab" data-panel="keywords">
+      Keywords <span class="count">{{ keywords|length }}</span>
+    </button>
+    <button class="tab" data-panel="sources">
+      Sources <span class="count">{{ sources|length }}</span>
+    </button>
+    <button class="tab" data-panel="settings">Settings</button>
+    <button class="tab" data-panel="subscribers">
+      Subscribers <span class="count">{{ subscribers|length }}</span>
+    </button>
+  </nav>
+
+  <!-- ───── Overview ───── -->
+  <section class="panel active" id="overview">
+    <div class="card">
+      <div class="card-row">
+        <div>
+          <h2 style="margin: 0;">자동 스크래핑</h2>
+          <div style="color: var(--muted); font-size: 0.85rem; margin-top: 0.2rem;">
+            매일 08:40 KST cron 실행 시 이 토글이 OFF 면 자동 skip.
+          </div>
+        </div>
+        <div style="display: flex; gap: 1rem; align-items: center;">
+          {% if scrape_enabled %}
+            <span class="state-on">● ON</span>
+          {% else %}
+            <span class="state-off">● OFF</span>
+          {% endif %}
+          <form method="post" action="/scrape-enabled/toggle">
+            <button type="submit">토글</button>
+          </form>
+        </div>
+      </div>
     </div>
-    <form method="post" action="/scrape-enabled/toggle">
-      <button type="submit">토글</button>
+
+    <div class="card">
+      <h2>요약</h2>
+      <table>
+        <tr><td>구독자</td><td><strong>{{ subscribers|length }}명</strong> ({{ subscribers|selectattr("active")|list|length }} active)</td></tr>
+        <tr><td>키워드</td><td><strong>{{ keywords|length }}개</strong> ({{ keywords|selectattr("active")|list|length }} active)</td></tr>
+        <tr><td>매체</td><td><strong>{{ sources|length }}개</strong> ({{ sources|selectattr("active")|list|length }} active)</td></tr>
+        {% if settings %}
+        <tr><td>freshness</td><td><code>{{ settings.freshness }}</code></td></tr>
+        <tr><td>키워드당 검색 결과 수</td><td>{{ settings.num_results_per_keyword }}</td></tr>
+        <tr><td>요약 입력 max</td><td>{{ settings.max_articles_for_summary }}건</td></tr>
+        <tr><td>최소 본문 길이</td><td>{{ settings.min_body_len }}자</td></tr>
+        {% endif %}
+      </table>
+    </div>
+  </section>
+
+  <!-- ───── Keywords ───── -->
+  <section class="panel" id="keywords">
+    <h2>검색 키워드 ({{ keywords|length }}개, active {{ keywords|selectattr("active")|list|length }}개)</h2>
+
+    <form class="add-form" method="post" action="/keywords">
+      <input type="text" name="keyword" required placeholder='예) "AI safety"'>
+      <button type="submit" class="primary">추가</button>
     </form>
-  </div>
 
-  <h2>구독자 명단 ({{ subscribers|length }}명)</h2>
+    {% if keywords %}
+      <table>
+        <thead>
+          <tr><th>ID</th><th>Keyword</th><th>Active</th><th></th></tr>
+        </thead>
+        <tbody>
+          {% for k in keywords %}
+            <tr>
+              <td>{{ k.id }}</td>
+              <td>{{ k.keyword }}</td>
+              <td>{{ "✔︎" if k.active else "—" }}</td>
+              <td>
+                <form class="inline" method="post" action="/keywords/{{ k.id }}/toggle">
+                  <button type="submit">토글</button>
+                </form>
+                <form class="inline" method="post" action="/keywords/{{ k.id }}/delete">
+                  <button type="submit" class="danger">삭제</button>
+                </form>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <div class="empty">등록된 키워드가 없습니다. (DB 가 비어 있으면 cron 실행 시 yaml seed 가 자동 import 됩니다.)</div>
+    {% endif %}
+  </section>
 
-  <form class="add-form" method="post" action="/subscribers">
-    <input type="email" name="email" required placeholder="user@example.com">
-    <button type="submit" class="primary">추가</button>
-  </form>
+  <!-- ───── Sources ───── -->
+  <section class="panel" id="sources">
+    <h2>매체 화이트리스트 ({{ sources|length }}개, active {{ sources|selectattr("active")|list|length }}개)</h2>
 
-  {% if subscribers %}
-    <table>
-      <thead>
-        <tr><th>ID</th><th>Email</th><th>Active</th><th></th></tr>
-      </thead>
-      <tbody>
-        {% for s in subscribers %}
-          <tr>
-            <td>{{ s.id }}</td>
-            <td>{{ s.email }}</td>
-            <td>{{ "✔︎" if s.active else "—" }}</td>
-            <td>
-              <form class="inline" method="post" action="/subscribers/{{ s.id }}/delete">
-                <button type="submit" class="danger">삭제</button>
-              </form>
-            </td>
-          </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  {% else %}
-    <div class="empty">등록된 구독자가 없습니다.</div>
-  {% endif %}
+    <form class="add-form" method="post" action="/sources">
+      <input type="text" name="domain" required placeholder="예) techcrunch.com">
+      <input type="text" name="name" required placeholder="예) TechCrunch">
+      <button type="submit" class="primary">추가</button>
+    </form>
 
-  <h2>검색 키워드 ({{ keywords|length }}개, active {{ keywords|selectattr("active")|list|length }}개)</h2>
+    {% if sources %}
+      <table>
+        <thead>
+          <tr><th>ID</th><th>Domain</th><th>Name</th><th>Active</th><th></th></tr>
+        </thead>
+        <tbody>
+          {% for s in sources %}
+            <tr>
+              <td>{{ s.id }}</td>
+              <td>{{ s.domain }}</td>
+              <td>{{ s.name }}</td>
+              <td>{{ "✔︎" if s.active else "—" }}</td>
+              <td>
+                <form class="inline" method="post" action="/sources/{{ s.id }}/toggle">
+                  <button type="submit">토글</button>
+                </form>
+                <form class="inline" method="post" action="/sources/{{ s.id }}/delete">
+                  <button type="submit" class="danger">삭제</button>
+                </form>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <div class="empty">등록된 매체가 없습니다. (DB 가 비어 있으면 cron 실행 시 yaml seed 가 자동 import 됩니다.)</div>
+    {% endif %}
+  </section>
 
-  <form class="add-form" method="post" action="/keywords">
-    <input type="text" name="keyword" required placeholder='예) "AI safety"'>
-    <button type="submit" class="primary">추가</button>
-  </form>
+  <!-- ───── Settings ───── -->
+  <section class="panel" id="settings">
+    <h2>운영 설정</h2>
 
-  {% if keywords %}
-    <table>
-      <thead>
-        <tr><th>ID</th><th>Keyword</th><th>Active</th><th></th></tr>
-      </thead>
-      <tbody>
-        {% for k in keywords %}
-          <tr>
-            <td>{{ k.id }}</td>
-            <td>{{ k.keyword }}</td>
-            <td>{{ "✔︎" if k.active else "—" }}</td>
-            <td>
-              <form class="inline" method="post" action="/keywords/{{ k.id }}/toggle">
-                <button type="submit">토글</button>
-              </form>
-              <form class="inline" method="post" action="/keywords/{{ k.id }}/delete">
-                <button type="submit" class="danger">삭제</button>
-              </form>
-            </td>
-          </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  {% else %}
-    <div class="empty">등록된 키워드가 없습니다. (DB 가 비어 있으면 cron 실행 시 yaml seed 가 자동 import 됩니다.)</div>
-  {% endif %}
-
-  <h2>매체 화이트리스트 ({{ sources|length }}개, active {{ sources|selectattr("active")|list|length }}개)</h2>
-
-  <form class="add-form" method="post" action="/sources">
-    <input type="text" name="domain" required placeholder="예) techcrunch.com">
-    <input type="text" name="name" required placeholder="예) TechCrunch">
-    <button type="submit" class="primary">추가</button>
-  </form>
-
-  {% if sources %}
-    <table>
-      <thead>
-        <tr><th>ID</th><th>Domain</th><th>Name</th><th>Active</th><th></th></tr>
-      </thead>
-      <tbody>
-        {% for s in sources %}
-          <tr>
-            <td>{{ s.id }}</td>
-            <td>{{ s.domain }}</td>
-            <td>{{ s.name }}</td>
-            <td>{{ "✔︎" if s.active else "—" }}</td>
-            <td>
-              <form class="inline" method="post" action="/sources/{{ s.id }}/toggle">
-                <button type="submit">토글</button>
-              </form>
-              <form class="inline" method="post" action="/sources/{{ s.id }}/delete">
-                <button type="submit" class="danger">삭제</button>
-              </form>
-            </td>
-          </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  {% else %}
-    <div class="empty">등록된 매체가 없습니다. (DB 가 비어 있으면 cron 실행 시 yaml seed 가 자동 import 됩니다.)</div>
-  {% endif %}
-
-  {% if settings %}
-  <h2>운영 설정</h2>
-
-  <form method="post" action="/settings" style="background: #f6f8fa; padding: 1rem 1.2rem; border-radius: 8px; border: 1px solid #d0d7de;">
-    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
-      <div>
-        <label for="freshness" style="display: block; font-weight: 600; margin-bottom: 0.3rem;">freshness</label>
-        <select name="freshness" id="freshness">
-          <option value="pd" {% if settings.freshness == "pd" %}selected{% endif %}>past day (1일)</option>
-          <option value="pw" {% if settings.freshness == "pw" %}selected{% endif %}>past week (1주)</option>
-          <option value="pm" {% if settings.freshness == "pm" %}selected{% endif %}>past month (1개월)</option>
-          <option value="py" {% if settings.freshness == "py" %}selected{% endif %}>past year (1년)</option>
-        </select>
+    {% if settings %}
+    <form method="post" action="/settings" class="card">
+      <div class="settings-form">
+        <div class="field">
+          <label for="freshness">freshness</label>
+          <select name="freshness" id="freshness">
+            <option value="pd" {% if settings.freshness == "pd" %}selected{% endif %}>past day (1일)</option>
+            <option value="pw" {% if settings.freshness == "pw" %}selected{% endif %}>past week (1주)</option>
+            <option value="pm" {% if settings.freshness == "pm" %}selected{% endif %}>past month (1개월)</option>
+            <option value="py" {% if settings.freshness == "py" %}selected{% endif %}>past year (1년)</option>
+          </select>
+          <div class="hint">검색 결과 기간 범위. 좁을수록 신선 / 넓을수록 풍부.</div>
+        </div>
+        <div class="field">
+          <label for="num_results_per_keyword">키워드당 검색 결과 수 (1-20)</label>
+          <input type="number" name="num_results_per_keyword" id="num_results_per_keyword"
+                 min="1" max="20" value="{{ settings.num_results_per_keyword }}">
+          <div class="hint">Brave Search 호출 1회당 받는 결과 수. max 20.</div>
+        </div>
+        <div class="field">
+          <label for="max_articles_for_summary">요약 입력 최대 기사 수 (1-100)</label>
+          <input type="number" name="max_articles_for_summary" id="max_articles_for_summary"
+                 min="1" max="100" value="{{ settings.max_articles_for_summary }}">
+          <div class="hint">Gemini 에 한 번에 넘기는 기사 수 cap. CLAUDE.md §4 의 10-20 기준.</div>
+        </div>
+        <div class="field">
+          <label for="min_body_len">최소 본문 길이 (50-5000자)</label>
+          <input type="number" name="min_body_len" id="min_body_len"
+                 min="50" max="5000" value="{{ settings.min_body_len }}">
+          <div class="hint">trafilatura 추출 본문이 이보다 짧으면 skip (paywall/카테고리 페이지 방어).</div>
+        </div>
       </div>
-      <div>
-        <label for="num_results_per_keyword" style="display: block; font-weight: 600; margin-bottom: 0.3rem;">키워드당 검색 결과 수 (1-20)</label>
-        <input type="number" name="num_results_per_keyword" id="num_results_per_keyword"
-               min="1" max="20" value="{{ settings.num_results_per_keyword }}">
-      </div>
-      <div>
-        <label for="max_articles_for_summary" style="display: block; font-weight: 600; margin-bottom: 0.3rem;">요약 입력 최대 기사 수 (1-100)</label>
-        <input type="number" name="max_articles_for_summary" id="max_articles_for_summary"
-               min="1" max="100" value="{{ settings.max_articles_for_summary }}">
-      </div>
-      <div>
-        <label for="min_body_len" style="display: block; font-weight: 600; margin-bottom: 0.3rem;">최소 본문 길이 (50-5000자)</label>
-        <input type="number" name="min_body_len" id="min_body_len"
-               min="50" max="5000" value="{{ settings.min_body_len }}">
-      </div>
-    </div>
-    <button type="submit" class="primary">설정 저장</button>
-  </form>
-  {% endif %}
+      <button type="submit" class="primary" style="margin-top: 0.5rem;">설정 저장</button>
+    </form>
+    {% else %}
+      <div class="empty">설정 store 가 연결되지 않았습니다.</div>
+    {% endif %}
+  </section>
+
+  <!-- ───── Subscribers ───── -->
+  <section class="panel" id="subscribers">
+    <h2>구독자 명단 ({{ subscribers|length }}명)</h2>
+
+    <form class="add-form" method="post" action="/subscribers">
+      <input type="email" name="email" required placeholder="user@example.com">
+      <button type="submit" class="primary">추가</button>
+    </form>
+
+    {% if subscribers %}
+      <table>
+        <thead>
+          <tr><th>ID</th><th>Email</th><th>Active</th><th></th></tr>
+        </thead>
+        <tbody>
+          {% for s in subscribers %}
+            <tr>
+              <td>{{ s.id }}</td>
+              <td>{{ s.email }}</td>
+              <td>{{ "✔︎" if s.active else "—" }}</td>
+              <td>
+                <form class="inline" method="post" action="/subscribers/{{ s.id }}/delete">
+                  <button type="submit" class="danger">삭제</button>
+                </form>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <div class="empty">등록된 구독자가 없습니다.</div>
+    {% endif %}
+  </section>
+
+  <div class="hash-hint" id="hash-hint"></div>
+
+  <script>
+    // Tab switching + hash deep-link
+    const tabs = document.querySelectorAll('.tab');
+    const panels = document.querySelectorAll('.panel');
+
+    function activate(name) {
+      tabs.forEach(t => t.classList.toggle('active', t.dataset.panel === name));
+      panels.forEach(p => p.classList.toggle('active', p.id === name));
+    }
+
+    tabs.forEach(t => {
+      t.addEventListener('click', () => {
+        activate(t.dataset.panel);
+        history.replaceState(null, '', '#' + t.dataset.panel);
+      });
+    });
+
+    // Restore from URL hash (deep-link)
+    const h = location.hash.replace('#', '');
+    if (h && document.getElementById(h)) {
+      activate(h);
+    }
+
+    // Sticky tab via form submission — set hidden hash for redirect target
+    // (서버는 /로 redirect 하지만 브라우저가 form action 의 hash 를 유지하므로
+    //  사용자가 마지막 본 탭으로 자연스럽게 복귀.)
+    document.querySelectorAll('form').forEach(f => {
+      f.addEventListener('submit', () => {
+        const cur = location.hash;
+        if (cur) {
+          const a = f.getAttribute('action') || '/';
+          if (!a.includes('#')) f.setAttribute('action', a + cur);
+        }
+      });
+    });
+  </script>
 </body>
 </html>

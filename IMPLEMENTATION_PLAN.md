@@ -50,7 +50,7 @@
 - [x] (F5) `admin.py` 키워드 라우트 — `POST /keywords` (add), `POST /keywords/{id}/delete`, `POST /keywords/{id}/toggle`. GET 은 메인 페이지 `/` 에 통합.
 - [x] (F6) `admin.py` 매체 라우트 — `POST /sources` (domain + name), `POST /sources/{id}/delete`, `POST /sources/{id}/toggle`. GET 은 `/` 통합.
 - [x] (F7) `admin.py` 설정 라우트 — `POST /settings` (freshness / num_results / max_articles / min_body_len 일괄 partial update). 폼은 `/` 통합.
-- [ ] (F8) `templates/admin.html` 탭 구조로 개편 — Overview / Keywords / Sources / Settings 4 탭
+- [x] (F8) `templates/admin.html` 탭 구조로 개편 — Overview / Keywords / Sources / Settings / Subscribers 5 탭 + URL hash deep-link
 - [ ] (F9) 통합 smoke test 갱신 — DB store 로 운영 조건 로드되는 케이스 추가
 - [ ] (F10) `CLAUDE.md` §6 / setup-guide.html §3 / README.md 운영 가이드 갱신 — admin 페이지 운영 흐름
 
