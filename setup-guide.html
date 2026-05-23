@@ -827,9 +827,14 @@ git push -u origin main</pre>
     <p>기본 포트 <strong>6661</strong>. 변경하려면 <code>--port 6661 --host 127.0.0.1</code>.</p>
 
     <div class="callout tip">
-      <span class="label">💡 admin 페이지 5 탭:</span>
-      Overview (스크래핑 ON/OFF + 요약) · Keywords (추가/삭제/토글) · Sources (매체 도메인 + name) · Settings (freshness / num_results / max / min_body) · Subscribers (메일 명단).
+      <span class="label">💡 admin 페이지 6 탭:</span>
+      Overview (스크래핑 ON/OFF + ▶ 강제발송 버튼) · Keywords · Sources · Settings · Subscribers · History (최근 20개 발송 이력).
       URL 의 hash 로 deep-link 가능 — 예: <code>http://127.0.0.1:6661/#keywords</code>.
+    </div>
+
+    <div class="callout">
+      <span class="label">🔁 강제발송:</span>
+      cron 안 기다리고 즉시 발송. 클릭 시 직전 success run 의 article 들을 DB 에서 삭제 후 새로 검색·발송 → 같은 기사가 dedup 으로 막혀 있어도 신선한 결과 보장. dry-run 체크박스로 메일만 skip 가능.
     </div>
 
     <h3>접속</h3>

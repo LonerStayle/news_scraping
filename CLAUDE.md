@@ -78,6 +78,12 @@ AI 트렌드를 따라가야 하는 개발자/PM 소수 (~10명). 각자 자기 
 > - `pipeline` 은 `load_search_config(stores, fallback=domain_cfg)` 로 운영 조건 결정 — DB active 가 있으면 DB, 없으면 yaml.
 > - 새 검색 조건 필드를 추가할 때는 (a) `0002_search_admin.sql` 또는 새 마이그레이션 (b) `search_config_store.SearchSettings` (c) `search_config_loader.LoadedConfig` (d) `pipeline.PipelineParams` (e) `admin.py` POST 라우트 (f) `admin.html` 폼 — 6 곳 모두 갱신.
 
+> 🔁 **강제발송 + 발송 이력 원칙 (Phase G):**
+> - `runs` 테이블 = 모든 발송 이력 source of truth. `RunStore.start_run() / mark_finished()` 로 자동 기록.
+> - **강제발송** (admin "▶ 강제발송" 버튼) = 직전 success run 의 article 들을 `ArticleStore.delete_by_run_id()` 로 삭제 후 새 run 시작. 같은 기사가 dedup 으로 막혀도 신선한 결과 보장.
+> - cron 자동 실행은 force=False (기본 dedup 동작) — 매일 다른 기사 자연스럽게 나옴.
+> - admin "History" 탭에서 최근 20개 run 의 시작/종료 시각, 상태, article_count, digest preview 확인 가능.
+
 ### 7. 규모·일정·비용 cap
 
 - **목표 완성 시점**: **기한 없음** (사람을 갈아넣지 않는다).

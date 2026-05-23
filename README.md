@@ -152,12 +152,13 @@ Actions 탭 → "Daily AI News Digest" → "Run workflow" → `dry_run` 체크 O
 
 ## Admin 페이지
 
-5 탭으로 운영 (Phase F):
-- **Overview** — 스크래핑 ON/OFF 토글 + 전체 요약
+6 탭으로 운영 (Phase F + G):
+- **Overview** — 스크래핑 ON/OFF 토글 + 전체 요약 + ▶ **강제발송** 버튼 (직전 run 기사 삭제 + 즉시 재발송)
 - **Keywords** — 검색 키워드 추가/삭제/active 토글
 - **Sources** — 매체 화이트리스트 (도메인 + 사람 친화명) 추가/삭제/active 토글
 - **Settings** — freshness / num_results_per_keyword / max_articles_for_summary / min_body_len 운영 옵션
 - **Subscribers** — 메일 명단 추가/제거
+- **History** — 최근 20개 run 의 시각/상태/기사 수/digest preview
 
 `domains/<name>/*.yaml` 은 **seed 용** — DB 가 비어 있으면 cron 첫 실행 시 yaml 에서 1회 자동 import. 이후 모든 변경은 admin 에서.
 

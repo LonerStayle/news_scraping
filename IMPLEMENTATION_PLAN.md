@@ -69,7 +69,7 @@
 - [x] (G5) `admin.py` POST `/run-now` 에 `force: bool=True` Form (기본값) 추가. run_pipeline callback 시그니처 `(dry_run, force)` 로 확장. cli closure 가 force 전달.
 - [x] (G6) `admin.html` Overview 카드 — "발송" → "**강제발송**" 으로 rename. force=True hidden input + dry-run 체크박스 유지. 토스트 메시지 4종 (force / live / dry-force / dry).
 - [x] (G7) `admin.html` 에 새 탭 **"History"** — `run_store.list_recent(20)` 결과 표시 (run_id 8자 / 시작·종료 시각 / status 색상 / article_count / digest preview 또는 error).
-- [ ] (G8) 테스트 일괄 + CLAUDE.md §6 / setup-guide.html / README.md 의 admin 운영 흐름 갱신.
+- [x] (G8) 테스트는 각 G1~G7 commit 에서 동반 처리 (총 248 pass). CLAUDE.md §6 강제발송 + 발송 이력 원칙 추가, setup-guide.html 6 탭 + 강제발송 callout, README.md admin 페이지 6 탭 설명 갱신.
 
 ---
 
