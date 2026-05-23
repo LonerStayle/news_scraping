@@ -164,6 +164,7 @@ def _entry_admin(*, host: str, port: int) -> int:
         keyword_store=keyword_store,
         source_store=source_store,
         settings_store=settings_store,
+        run_store=run_store,
         run_pipeline=run_pipeline_now,
         auth_enabled=settings.admin_auth_enabled,
     )

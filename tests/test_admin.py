@@ -6,6 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from ai_news_scraping.admin import create_app
+from ai_news_scraping.run_store import InMemoryRunStore
 from ai_news_scraping.scrape_state_store import InMemoryScrapeStateStore
 from ai_news_scraping.search_config_store import (
     InMemoryKeywordStore,
@@ -495,3 +496,49 @@ def test_run_now_requires_auth() -> None:
     client = TestClient(app)
     resp = client.post("/run-now", data={}, follow_redirects=False)
     assert resp.status_code == 401
+
+
+# ────────── History 탭 (G7) ──────────
+
+
+def test_history_tab_lists_recent_runs() -> None:
+    rs = InMemoryRunStore()
+    r1 = rs.start_run()
+    rs.mark_finished(
+        r1.run_id, status="success", article_count=12,
+        digest_text="오늘의 AI 트렌드 요약",
+    )
+    r2 = rs.start_run()
+    rs.mark_finished(r2.run_id, status="failed", article_count=0, error="brave 500")
+
+    app = create_app(
+        admin_token=ADMIN_TOKEN,
+        subscriber_store=InMemorySubscriberStore(),
+        scrape_state_store=InMemoryScrapeStateStore(),
+        run_store=rs,
+    )
+    client = TestClient(app)
+    resp = client.get("/", auth=AUTH)
+    text = resp.text
+    # 두 run 모두 표시
+    assert r1.run_id[:8] in text
+    assert r2.run_id[:8] in text
+    # 상태 표시
+    assert "success" in text
+    assert "failed" in text
+    # 에러 메시지 일부 표시
+    assert "brave 500" in text
+    # 발송 이력 헤더
+    assert "발송 이력" in text
+
+
+def test_history_tab_empty_when_no_run_store() -> None:
+    app = create_app(
+        admin_token=ADMIN_TOKEN,
+        subscriber_store=InMemorySubscriberStore(),
+        scrape_state_store=InMemoryScrapeStateStore(),
+        run_store=None,
+    )
+    client = TestClient(app)
+    resp = client.get("/", auth=AUTH)
+    assert "아직 발송 이력이 없습니다" in resp.text

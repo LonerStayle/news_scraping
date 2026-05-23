@@ -25,6 +25,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.templating import Jinja2Templates
 
+from .run_store import RunStore
 from .scrape_state_store import ScrapeStateStore
 from .search_config_store import KeywordStore, SettingsStore, SourceStore
 from .subscriber_store import SubscriberStore
@@ -52,6 +53,7 @@ def create_app(
     keyword_store: KeywordStore | None = None,
     source_store: SourceStore | None = None,
     settings_store: SettingsStore | None = None,
+    run_store: RunStore | None = None,
     # run_pipeline(dry_run, force) — 강제발송 시 force=True 로 직전 run article 삭제.
     run_pipeline: Callable[[bool, bool], Any] | None = None,
     auth_enabled: bool = True,
@@ -86,6 +88,7 @@ def create_app(
                 "keywords": keyword_store.list_all() if keyword_store else [],
                 "sources": source_store.list_all() if source_store else [],
                 "settings": settings_store.get() if settings_store else None,
+                "runs": run_store.list_recent(20) if run_store else [],
             },
         )
 
