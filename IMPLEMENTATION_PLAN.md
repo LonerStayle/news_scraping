@@ -54,6 +54,23 @@
 - [x] (F9) 통합 smoke test 갱신 — cli.run_command 를 통한 DB → PipelineParams 매핑 검증 + yaml fallback 검증 2 케이스
 - [x] (F10) `CLAUDE.md` §6 + setup-guide.html §3 + README.md 운영 가이드 갱신 — admin 페이지 5탭 + 0002 마이그레이션 + seed/fallback 원칙
 
+### Phase G — 강제발송 + 발송 이력 (대표님 추가 요청)
+
+> 대표님 피드백:
+> 1. "발송" 버튼 → "**강제발송**" 으로 이름 변경
+> 2. 강제발송 = 바로 **직전 run 에서 다룬 article 들을 DB 에서 삭제** 후 발송 (모두 X, 직전 1회분만)
+> 3. 발송 이력 다 남기기 — runs 테이블 활용 (어디서 언제 어떤 결과로 끝났는지)
+> 4. yaml seed / DB 격리 / schema=ai_news 원칙 그대로 유지
+
+- [ ] (G1) `run_store.py` 신규 — `RunStore` protocol + InMemory + Supabase. `start_run() / mark_finished(run_id, status, article_count, error?, digest_text?) / list_recent(limit) / get_last_success()`. RunRecord dataclass + 테스트.
+- [ ] (G2) `store.py` 의 `ArticleStore` 에 `delete_by_run_id(run_id) -> int` 추가 (InMemory + Supabase 양쪽) + 테스트.
+- [ ] (G3) `pipeline.py` 가 `RunStore` 받아서 run 시작 (status=running) / 종료 (success|failed|skipped, article_count, digest_text) 기록. PipelineDeps 에 run_store 추가. 예외 시 runs.error 기록.
+- [ ] (G4) `cli.run_command` 에 `force: bool=False` 인자 추가. force=True 면 `run_store.get_last_success()` → `article_store.delete_by_run_id(last.run_id)` → 새 run 진행.
+- [ ] (G5) `admin.py` POST `/run-now` 에 `force: bool=False` Form 추가 + POST `/run-now/force` 별도 라우트 (편의). cli closure 도 force 전달.
+- [ ] (G6) `admin.html` Overview 카드 — "발송" → "**강제발송**" 으로 rename. force=True 가 기본. dry-run 체크박스는 유지.
+- [ ] (G7) `admin.html` 에 새 탭 **"History"** — `run_store.list_recent(20)` 결과 표시 (run_id 짧게 / 시작·종료 시각 / status / article_count / digest preview 첫 줄).
+- [ ] (G8) 테스트 일괄 + CLAUDE.md §6 / setup-guide.html / README.md 의 admin 운영 흐름 갱신.
+
 ---
 
 ## 완료 조건 (PROJECT_DONE)
