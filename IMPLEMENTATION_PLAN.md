@@ -23,7 +23,7 @@
 - [x] `store.py` — Supabase 클라이언트로 article upsert (url unique), dedup 처리
 - [x] `summarize.py` — Gemini API 호출 wrapper. 영문 본문 N개 → 한국어 통합 트렌드 요약 (10~20건 기준)
 - [x] `mail.py` — Gmail SMTP 발송 wrapper. 구독자 명단 BCC 일괄 발송. 제목·본문 템플릿.
-- [ ] `pipeline.py` — Phase B 모든 단계 orchestration. `run()` 단일 entry point.
+- [x] `pipeline.py` — Phase B 모든 단계 orchestration. `run()` 단일 entry point.
 
 ### Phase C — Admin (심플)
 
