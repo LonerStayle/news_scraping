@@ -329,3 +329,165 @@ def test_smoke_dry_run_skips_mail_but_runs_everything_else() -> None:
     # SMTP 는 호출 안 됨
     assert smtp.sent == []
     assert smtp.quit_called is False
+
+
+# ════════════════════ F9: cli + DB stores → pipeline 통합 smoke ════════════════════
+
+
+def test_smoke_db_config_drives_pipeline_via_cli_run_command() -> None:
+    """admin 이 DB 에 키워드/매체/settings 를 채운 상태에서 cli.run_command 가
+    LoadedConfig 를 통해 pipeline 까지 정확히 흘려보내는지 검증.
+
+    여기서는 fake pipeline_runner 로 PipelineParams 만 capture 한다 — pipeline
+    내부 흐름은 test_smoke_end_to_end_through_real_modules 가 이미 커버.
+    """
+    from datetime import UTC, datetime
+
+    from ai_news_scraping import cli
+    from ai_news_scraping.config import Settings
+    from ai_news_scraping.domain_config import DomainConfig, Source
+    from ai_news_scraping.pipeline import PipelineResult
+    from ai_news_scraping.scrape_state_store import InMemoryScrapeStateStore
+    from ai_news_scraping.search_config_store import (
+        InMemoryKeywordStore,
+        InMemorySettingsStore,
+        InMemorySourceStore,
+    )
+    from ai_news_scraping.subscriber_store import InMemorySubscriberStore
+
+    # admin 에서 DB 채운 상태 가정
+    kw = InMemoryKeywordStore()
+    kw.add("artificial intelligence")
+    kw.add("LLM")
+    src = InMemorySourceStore()
+    src.add("techcrunch.com", "TechCrunch")
+    src.add("theverge.com", "The Verge")
+    st_settings = InMemorySettingsStore()
+    st_settings.update(
+        freshness="pd",
+        num_results_per_keyword=15,
+        max_articles_for_summary=10,
+        min_body_len=400,
+    )
+
+    sub_store = InMemorySubscriberStore()
+    sub_store.add("alice@x.com")
+
+    captured: dict[str, Any] = {}
+    now = datetime(2026, 5, 23, 0, 40, 0, tzinfo=UTC)
+
+    def fake_runner(params: PipelineParams, deps: PipelineDeps) -> PipelineResult:
+        captured["params"] = params
+        return PipelineResult(
+            run_id="r", started_at=now, finished_at=now,
+            search_total=2, new_count=2, extracted_count=2, article_count=2,
+            digest_markdown="ok", accepted=["alice@x.com"], refused={},
+            status="success",
+        )
+
+    settings = Settings(  # type: ignore[call-arg]
+        _env_file=None,
+        brave_search_api_key="BSK",
+        gemini_api_key="G",
+        gemini_model="gemini-2.5-flash",
+        gmail_user="me@gmail.com",
+        gmail_app_password="P",
+        supabase_url="https://x.supabase.co",
+        supabase_service_role_key="SRK",
+        admin_token="T",
+        dry_run=False,
+        digest_tz="Asia/Seoul",
+    )
+    yaml_fallback = DomainConfig(
+        keywords=["yaml-only"],  # DB 가 차 있으니 무시됨
+        sources=[Source(domain="yaml.com", name="YAML")],
+    )
+
+    rc = cli.run_command(
+        settings=settings,
+        domain_cfg=yaml_fallback,
+        article_store=InMemoryArticleStore(),
+        sub_store=sub_store,
+        scrape_store=InMemoryScrapeStateStore(initial=True),
+        keyword_store=kw,
+        source_store=src,
+        settings_store=st_settings,
+        dry_run=False,
+        pipeline_runner=fake_runner,
+    )
+    assert rc == 0
+
+    p = captured["params"]
+    # 키워드/매체 모두 DB 에서 옴 (yaml fallback 무시)
+    assert p.keywords == ["artificial intelligence", "LLM"]
+    assert p.source_domains == ["techcrunch.com", "theverge.com"]
+    assert p.source_name_map == {
+        "techcrunch.com": "TechCrunch",
+        "theverge.com": "The Verge",
+    }
+    # settings 도 DB 에서 옴
+    assert p.freshness == "pd"
+    assert p.num_results_per_keyword == 15
+    assert p.max_articles_for_summary == 10
+
+
+def test_smoke_db_empty_falls_back_to_yaml_via_cli_run_command() -> None:
+    """DB 가 비어 있으면 yaml fallback 사용."""
+    from datetime import UTC, datetime
+
+    from ai_news_scraping import cli
+    from ai_news_scraping.config import Settings
+    from ai_news_scraping.domain_config import DomainConfig, Source
+    from ai_news_scraping.pipeline import PipelineResult
+    from ai_news_scraping.scrape_state_store import InMemoryScrapeStateStore
+    from ai_news_scraping.search_config_store import (
+        InMemoryKeywordStore,
+        InMemorySettingsStore,
+        InMemorySourceStore,
+    )
+    from ai_news_scraping.subscriber_store import InMemorySubscriberStore
+
+    sub_store = InMemorySubscriberStore()
+    sub_store.add("x@x.com")
+
+    captured: dict[str, Any] = {}
+    now = datetime(2026, 5, 23, 0, 40, 0, tzinfo=UTC)
+
+    def fake_runner(params: PipelineParams, deps: PipelineDeps) -> PipelineResult:
+        captured["params"] = params
+        return PipelineResult(
+            run_id="r", started_at=now, finished_at=now,
+            search_total=0, new_count=0, extracted_count=0, article_count=0,
+            digest_markdown="", accepted=[], refused={},
+            status="skipped",
+        )
+
+    cli.run_command(
+        settings=Settings(  # type: ignore[call-arg]
+            _env_file=None,
+            brave_search_api_key="K", gemini_api_key="G",
+            gemini_model="m", gmail_user="me@x.com", gmail_app_password="P",
+            supabase_url="https://x.supabase.co", supabase_service_role_key="SRK",
+            admin_token="T", dry_run=False, digest_tz="Asia/Seoul",
+        ),
+        domain_cfg=DomainConfig(
+            keywords=["yaml-kw1", "yaml-kw2"],
+            sources=[
+                Source(domain="yaml-a.com", name="YAML A"),
+                Source(domain="yaml-b.com", name="YAML B"),
+            ],
+        ),
+        article_store=InMemoryArticleStore(),
+        sub_store=sub_store,
+        scrape_store=InMemoryScrapeStateStore(initial=True),
+        keyword_store=InMemoryKeywordStore(),
+        source_store=InMemorySourceStore(),
+        settings_store=InMemorySettingsStore(),
+        dry_run=False,
+        pipeline_runner=fake_runner,
+    )
+
+    p = captured["params"]
+    assert p.keywords == ["yaml-kw1", "yaml-kw2"]
+    assert p.source_domains == ["yaml-a.com", "yaml-b.com"]
+    assert p.source_name_map == {"yaml-a.com": "YAML A", "yaml-b.com": "YAML B"}
