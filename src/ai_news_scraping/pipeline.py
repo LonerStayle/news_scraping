@@ -15,6 +15,7 @@
 from __future__ import annotations
 
 import logging
+import time
 import uuid
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -46,6 +47,7 @@ class PipelineParams:
     num_results_per_keyword: int = 10
     max_articles_for_summary: int = 20
     freshness: str = "pd"  # Brave Search: past day
+    search_delay_seconds: float = 1.2  # Brave Free: 1 query/sec rate limit
     subject_template: str = "오늘의 AI 트렌드 ({date})"
 
 
@@ -91,7 +93,10 @@ def run(params: PipelineParams, deps: PipelineDeps) -> PipelineResult:
 
     # ───── 1) 검색 ─────
     raw_results: list[SearchResult] = []
-    for keyword in params.keywords:
+    for i, keyword in enumerate(params.keywords):
+        if i > 0 and params.search_delay_seconds > 0:
+            # Brave Free tier: 1 query/sec. 키워드 사이 sleep 으로 429 방어.
+            time.sleep(params.search_delay_seconds)
         try:
             results = deps.search_fn(
                 keyword,
