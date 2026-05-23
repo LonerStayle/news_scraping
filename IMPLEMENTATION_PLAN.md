@@ -44,7 +44,7 @@
 > yaml 은 seed 용으로 유지 (도메인 재사용 starting point), DB 우선·yaml fallback.
 
 - [x] (F1) `0002_search_admin.sql` 마이그레이션 — `ai_news.search_keywords` / `ai_news.search_sources` / `ai_news.search_settings` 3 테이블 + RLS + seed singleton row + 테스트
-- [ ] (F2) `search_config_store.py` 신규 — `KeywordStore`, `SourceStore`, `SettingsStore` 3 protocol + InMemory + Supabase 구현 + 테스트
+- [x] (F2) `search_config_store.py` 신규 — `KeywordStore`, `SourceStore`, `SettingsStore` 3 protocol + InMemory + Supabase 구현 + 테스트
 - [ ] (F3) `pipeline.py` 가 DB store 우선 로드, 비어있으면 yaml fallback — `load_search_config(stores, yaml_fallback) -> (keywords, sources, settings)` 헬퍼
 - [ ] (F4) `cli.py` 의 `_entry_run` 이 store 들 초기화 + seed (DB 비었으면 yaml 에서 자동 import 1회)
 - [ ] (F5) `admin.py` 키워드 라우트 — `GET /keywords`, `POST /keywords`, `POST /keywords/{id}/delete`, `POST /keywords/{id}/toggle`
