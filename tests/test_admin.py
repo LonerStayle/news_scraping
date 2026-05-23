@@ -9,6 +9,7 @@ from ai_news_scraping.admin import create_app
 from ai_news_scraping.scrape_state_store import InMemoryScrapeStateStore
 from ai_news_scraping.search_config_store import (
     InMemoryKeywordStore,
+    InMemorySettingsStore,
     InMemorySourceStore,
 )
 from ai_news_scraping.subscriber_store import InMemorySubscriberStore
@@ -24,6 +25,7 @@ class AdminCtx:
     scrape_store: InMemoryScrapeStateStore
     keyword_store: InMemoryKeywordStore
     source_store: InMemorySourceStore
+    settings_store: InMemorySettingsStore
 
 
 @pytest.fixture
@@ -32,12 +34,14 @@ def ctx() -> AdminCtx:
     scrape_store = InMemoryScrapeStateStore(initial=True)
     keyword_store = InMemoryKeywordStore()
     source_store = InMemorySourceStore()
+    settings_store = InMemorySettingsStore()
     app = create_app(
         admin_token=ADMIN_TOKEN,
         subscriber_store=sub_store,
         scrape_state_store=scrape_store,
         keyword_store=keyword_store,
         source_store=source_store,
+        settings_store=settings_store,
     )
     return AdminCtx(
         client=TestClient(app),
@@ -45,6 +49,7 @@ def ctx() -> AdminCtx:
         scrape_store=scrape_store,
         keyword_store=keyword_store,
         source_store=source_store,
+        settings_store=settings_store,
     )
 
 
@@ -326,5 +331,96 @@ def test_source_routes_503_when_store_missing() -> None:
         "/sources", auth=AUTH,
         data={"domain": "a.com", "name": "A"},
         follow_redirects=False,
+    )
+    assert resp.status_code == 503
+
+
+# ────────── Settings (F7) ──────────
+
+
+def test_settings_update_freshness(ctx: AdminCtx) -> None:
+    resp = ctx.client.post(
+        "/settings", auth=AUTH,
+        data={"freshness": "pm"},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 303
+    assert ctx.settings_store.get().freshness == "pm"
+
+
+def test_settings_update_multiple(ctx: AdminCtx) -> None:
+    ctx.client.post(
+        "/settings", auth=AUTH,
+        data={
+            "freshness": "pd",
+            "num_results_per_keyword": "15",
+            "max_articles_for_summary": "30",
+            "min_body_len": "400",
+        },
+        follow_redirects=False,
+    )
+    cur = ctx.settings_store.get()
+    assert cur.freshness == "pd"
+    assert cur.num_results_per_keyword == 15
+    assert cur.max_articles_for_summary == 30
+    assert cur.min_body_len == 400
+
+
+def test_settings_update_partial_preserves_other_fields(ctx: AdminCtx) -> None:
+    ctx.client.post(
+        "/settings", auth=AUTH,
+        data={"freshness": "pm"},
+        follow_redirects=False,
+    )
+    cur = ctx.settings_store.get()
+    assert cur.freshness == "pm"
+    assert cur.num_results_per_keyword == 20  # 기본값 유지
+    assert cur.max_articles_for_summary == 20
+    assert cur.min_body_len == 300
+
+
+def test_settings_invalid_freshness_returns_400(ctx: AdminCtx) -> None:
+    resp = ctx.client.post(
+        "/settings", auth=AUTH,
+        data={"freshness": "px"},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 400
+
+
+def test_settings_out_of_range_returns_400(ctx: AdminCtx) -> None:
+    resp = ctx.client.post(
+        "/settings", auth=AUTH,
+        data={"num_results_per_keyword": "50"},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 400
+
+
+def test_settings_requires_auth(ctx: AdminCtx) -> None:
+    resp = ctx.client.post(
+        "/settings", data={"freshness": "pd"}, follow_redirects=False
+    )
+    assert resp.status_code == 401
+
+
+def test_settings_renders_in_index(ctx: AdminCtx) -> None:
+    ctx.settings_store.update(freshness="pm")
+    resp = ctx.client.get("/", auth=AUTH)
+    # 현재 선택된 freshness 가 select 에서 selected 로 표시되어야
+    assert "운영 설정" in resp.text
+    assert 'value="pm"' in resp.text
+
+
+def test_settings_route_503_when_store_missing() -> None:
+    app = create_app(
+        admin_token=ADMIN_TOKEN,
+        subscriber_store=InMemorySubscriberStore(),
+        scrape_state_store=InMemoryScrapeStateStore(),
+        settings_store=None,
+    )
+    client = TestClient(app)
+    resp = client.post(
+        "/settings", auth=AUTH, data={"freshness": "pd"}, follow_redirects=False
     )
     assert resp.status_code == 503

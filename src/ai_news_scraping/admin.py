@@ -17,7 +17,7 @@ from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.templating import Jinja2Templates
 
 from .scrape_state_store import ScrapeStateStore
-from .search_config_store import KeywordStore, SourceStore
+from .search_config_store import KeywordStore, SettingsStore, SourceStore
 from .subscriber_store import SubscriberStore
 
 DEFAULT_TEMPLATES_DIR = Path(__file__).resolve().parents[2] / "templates"
@@ -36,6 +36,7 @@ def create_app(
     scrape_state_store: ScrapeStateStore,
     keyword_store: KeywordStore | None = None,
     source_store: SourceStore | None = None,
+    settings_store: SettingsStore | None = None,
     templates_dir: Path | None = None,
 ) -> FastAPI:
     app = FastAPI(title="ai_news_scraping admin")
@@ -62,6 +63,7 @@ def create_app(
                 "subscribers": subscriber_store.list_all(),
                 "keywords": keyword_store.list_all() if keyword_store else [],
                 "sources": source_store.list_all() if source_store else [],
+                "settings": settings_store.get() if settings_store else None,
             },
         )
 
@@ -146,6 +148,28 @@ def create_app(
         if current is None:
             raise HTTPException(status_code=404, detail="source not found")
         source_store.set_active(source_id, not current.active)
+        return RedirectResponse(url="/", status_code=status.HTTP_303_SEE_OTHER)
+
+    # ────────── Settings 라우트 (Phase F7) ──────────
+
+    @app.post("/settings", dependencies=auth_dep)
+    def update_settings(
+        freshness: Annotated[str | None, Form()] = None,
+        num_results_per_keyword: Annotated[int | None, Form()] = None,
+        max_articles_for_summary: Annotated[int | None, Form()] = None,
+        min_body_len: Annotated[int | None, Form()] = None,
+    ) -> RedirectResponse:
+        if settings_store is None:
+            raise HTTPException(status_code=503, detail="settings store not configured")
+        try:
+            settings_store.update(
+                freshness=freshness,
+                num_results_per_keyword=num_results_per_keyword,
+                max_articles_for_summary=max_articles_for_summary,
+                min_body_len=min_body_len,
+            )
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
         return RedirectResponse(url="/", status_code=status.HTTP_303_SEE_OTHER)
 
     return app

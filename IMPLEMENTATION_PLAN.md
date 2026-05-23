@@ -49,7 +49,7 @@
 - [x] (F4) `cli.py` 의 `_entry_run` 이 store 들 초기화 + seed (DB 비었으면 yaml 에서 자동 import 1회) + loader 호출 → build_params
 - [x] (F5) `admin.py` 키워드 라우트 — `POST /keywords` (add), `POST /keywords/{id}/delete`, `POST /keywords/{id}/toggle`. GET 은 메인 페이지 `/` 에 통합.
 - [x] (F6) `admin.py` 매체 라우트 — `POST /sources` (domain + name), `POST /sources/{id}/delete`, `POST /sources/{id}/toggle`. GET 은 `/` 통합.
-- [ ] (F7) `admin.py` 설정 라우트 — `GET /settings`, `POST /settings` (freshness / num_results / max_articles / min_body_len 일괄 update)
+- [x] (F7) `admin.py` 설정 라우트 — `POST /settings` (freshness / num_results / max_articles / min_body_len 일괄 partial update). 폼은 `/` 통합.
 - [ ] (F8) `templates/admin.html` 탭 구조로 개편 — Overview / Keywords / Sources / Settings 4 탭
 - [ ] (F9) 통합 smoke test 갱신 — DB store 로 운영 조건 로드되는 케이스 추가
 - [ ] (F10) `CLAUDE.md` §6 / setup-guide.html §3 / README.md 운영 가이드 갱신 — admin 페이지 운영 흐름
