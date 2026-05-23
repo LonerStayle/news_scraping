@@ -9,6 +9,7 @@ from ai_news_scraping import cli
 from ai_news_scraping.config import Settings
 from ai_news_scraping.domain_config import DomainConfig, Source
 from ai_news_scraping.pipeline import PipelineDeps, PipelineParams, PipelineResult
+from ai_news_scraping.run_store import InMemoryRunStore
 from ai_news_scraping.scrape_state_store import InMemoryScrapeStateStore
 from ai_news_scraping.search_config_loader import LoadedConfig
 from ai_news_scraping.search_config_store import (
@@ -338,6 +339,109 @@ def test_run_command_failed_status_returns_1() -> None:
         pipeline_runner=fake_runner,
     )
     assert rc == 1
+
+
+# ────────── G4: force 모드 ──────────
+
+
+def test_force_deletes_articles_from_last_success_run() -> None:
+    sub_store = InMemorySubscriberStore()
+    sub_store.add("x@x.com")
+    article_store = InMemoryArticleStore()
+    kw, src, st_settings = _make_search_stores()
+    rs = InMemoryRunStore()
+
+    # 직전 success run 시뮬레이션
+    prev = rs.start_run()
+    rs.mark_finished(prev.run_id, status="success", article_count=2)
+    # 그 run 의 article 2개를 store 에 저장
+    from ai_news_scraping.extract import ExtractedArticle
+    for i in range(2):
+        art = ExtractedArticle(
+            url=f"https://a.com/{i}", title=f"T{i}", body_text="b" * 400,
+            raw_html_excerpt="", published_at=None, source_domain="a.com",
+        )
+        article_store.upsert_article(art, keyword="kw1", run_id=prev.run_id)
+    assert len(article_store.articles) == 2
+
+    captured: dict[str, Any] = {}
+
+    def fake_runner(p: PipelineParams, d: PipelineDeps) -> PipelineResult:
+        captured["articles_at_run"] = len(article_store.articles)
+        return _ok_result()
+
+    cli.run_command(
+        settings=_make_settings(),
+        domain_cfg=_make_domain(),
+        article_store=article_store,
+        sub_store=sub_store,
+        scrape_store=InMemoryScrapeStateStore(initial=True),
+        keyword_store=kw, source_store=src, settings_store=st_settings,
+        run_store=rs,
+        dry_run=False,
+        force=True,
+        pipeline_runner=fake_runner,
+    )
+    # pipeline 호출 시점에는 이미 직전 run article 2개 삭제됨
+    assert captured["articles_at_run"] == 0
+
+
+def test_force_without_previous_success_is_noop() -> None:
+    sub_store = InMemorySubscriberStore()
+    sub_store.add("x@x.com")
+    rs = InMemoryRunStore()  # 비어 있음
+    kw, src, st_settings = _make_search_stores()
+
+    def fake_runner(p: PipelineParams, d: PipelineDeps) -> PipelineResult:
+        return _ok_result()
+
+    rc = cli.run_command(
+        settings=_make_settings(),
+        domain_cfg=_make_domain(),
+        article_store=InMemoryArticleStore(),
+        sub_store=sub_store,
+        scrape_store=InMemoryScrapeStateStore(initial=True),
+        keyword_store=kw, source_store=src, settings_store=st_settings,
+        run_store=rs,
+        dry_run=False,
+        force=True,
+        pipeline_runner=fake_runner,
+    )
+    assert rc == 0  # 그냥 진행
+
+
+def test_force_false_does_not_delete() -> None:
+    article_store = InMemoryArticleStore()
+    rs = InMemoryRunStore()
+    prev = rs.start_run()
+    rs.mark_finished(prev.run_id, status="success", article_count=1)
+    from ai_news_scraping.extract import ExtractedArticle
+    article_store.upsert_article(
+        ExtractedArticle(
+            url="https://a.com/x", title="T", body_text="b" * 400,
+            raw_html_excerpt="", published_at=None, source_domain="a.com",
+        ),
+        keyword="kw1", run_id=prev.run_id,
+    )
+
+    sub_store = InMemorySubscriberStore()
+    sub_store.add("x@x.com")
+    kw, src, st_settings = _make_search_stores()
+
+    cli.run_command(
+        settings=_make_settings(),
+        domain_cfg=_make_domain(),
+        article_store=article_store,
+        sub_store=sub_store,
+        scrape_store=InMemoryScrapeStateStore(initial=True),
+        keyword_store=kw, source_store=src, settings_store=st_settings,
+        run_store=rs,
+        dry_run=False,
+        force=False,  # default
+        pipeline_runner=lambda p, d: _ok_result(),
+    )
+    # 삭제 안 됨
+    assert len(article_store.articles) == 1
 
 
 def test_run_command_settings_dry_run_flag_overrides_cli() -> None:

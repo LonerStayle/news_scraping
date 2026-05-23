@@ -22,6 +22,7 @@ from . import pipeline as pipeline_mod
 from .config import Settings, get_settings
 from .domain_config import DomainConfig, load_domain
 from .pipeline import PipelineDeps, PipelineParams, PipelineResult
+from .run_store import RunStore, SupabaseRunStore
 from .scrape_state_store import ScrapeStateStore, SupabaseScrapeStateStore
 from .search_config_loader import LoadedConfig, load_search_config
 from .search_config_store import (
@@ -87,6 +88,7 @@ def _entry_run(*, dry_run: bool, domain: str) -> int:
     keyword_store = SupabaseKeywordStore(client, schema=schema)
     source_store = SupabaseSourceStore(client, schema=schema)
     settings_store = SupabaseSettingsStore(client, schema=schema)
+    run_store = SupabaseRunStore(client, schema=schema)
 
     seed_search_config(keyword_store, source_store, domain_cfg)
 
@@ -99,6 +101,7 @@ def _entry_run(*, dry_run: bool, domain: str) -> int:
         keyword_store=keyword_store,
         source_store=source_store,
         settings_store=settings_store,
+        run_store=run_store,
         dry_run=dry_run,
     )
 
@@ -130,11 +133,12 @@ def _entry_admin(*, host: str, port: int) -> int:
     keyword_store = SupabaseKeywordStore(client, schema=schema)
     source_store = SupabaseSourceStore(client, schema=schema)
     settings_store = SupabaseSettingsStore(client, schema=schema)
+    run_store = SupabaseRunStore(client, schema=schema)
 
-    # admin 의 "지금 보내기" 가 호출할 closure — settings + stores 를 캡쳐.
+    # admin 의 "강제발송" 이 호출할 closure — settings + stores 를 캡쳐.
     domain_cfg = load_domain("ai_news")
 
-    def run_pipeline_now(dry_run: bool = False) -> int:
+    def run_pipeline_now(dry_run: bool = False, force: bool = True) -> int:
         try:
             return run_command(
                 settings=settings,
@@ -145,7 +149,9 @@ def _entry_admin(*, host: str, port: int) -> int:
                 keyword_store=keyword_store,
                 source_store=source_store,
                 settings_store=settings_store,
+                run_store=run_store,
                 dry_run=dry_run,
+                force=force,
             )
         except Exception:
             logger.exception("run_pipeline_now failed")
@@ -193,7 +199,9 @@ def run_command(
     keyword_store: KeywordStore,
     source_store: SourceStore,
     settings_store: SettingsStore,
+    run_store: RunStore | None = None,
     dry_run: bool = False,
+    force: bool = False,
     pipeline_runner: PipelineRunner = pipeline_mod.run,
 ) -> int:
     effective_dry_run = dry_run or settings.dry_run
@@ -207,6 +215,19 @@ def run_command(
         logger.warning("no active subscribers, skipping mail send")
         return 0
 
+    # force=True: 직전 success run 의 article 삭제 후 새 run 시작.
+    # 동일 기사 dedup 우회용 — admin "강제발송" 버튼이 사용.
+    if force and run_store is not None:
+        last = run_store.get_last_success()
+        if last is not None:
+            deleted = article_store.delete_by_run_id(last.run_id)
+            logger.info(
+                "force: deleted %d articles from last run %s",
+                deleted, last.run_id,
+            )
+        else:
+            logger.info("force: no previous success run — nothing to delete")
+
     loaded = load_search_config(
         keyword_store, source_store, settings_store, fallback=domain_cfg,
     )
@@ -217,7 +238,7 @@ def run_command(
         subscribers=subscribers,
         dry_run=effective_dry_run,
     )
-    deps = PipelineDeps(store=article_store)
+    deps = PipelineDeps(store=article_store, run_store=run_store)
     result = pipeline_runner(params, deps)
 
     logger.info(

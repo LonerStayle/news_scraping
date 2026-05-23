@@ -65,7 +65,7 @@
 - [x] (G1) `run_store.py` 신규 — `RunStore` protocol + InMemory + Supabase. `start_run() / mark_finished(run_id, status, article_count, error?, digest_text?) / list_recent(limit) / get_last_success()`. RunRecord dataclass + 테스트.
 - [x] (G2) `store.py` 의 `ArticleStore` 에 `delete_by_run_id(run_id) -> int` 추가 (InMemory + Supabase 양쪽) + 테스트.
 - [x] (G3) `pipeline.py` 가 `RunStore` 받아서 run 시작 (status=running) / 종료 (success|failed|skipped, article_count, digest_text) 기록. PipelineDeps 에 run_store 추가. 예외 시 runs.error 기록.
-- [ ] (G4) `cli.run_command` 에 `force: bool=False` 인자 추가. force=True 면 `run_store.get_last_success()` → `article_store.delete_by_run_id(last.run_id)` → 새 run 진행.
+- [x] (G4) `cli.run_command` 에 `force: bool=False` 인자 추가. force=True 면 `run_store.get_last_success()` → `article_store.delete_by_run_id(last.run_id)` → 새 run 진행.
 - [ ] (G5) `admin.py` POST `/run-now` 에 `force: bool=False` Form 추가 + POST `/run-now/force` 별도 라우트 (편의). cli closure 도 force 전달.
 - [ ] (G6) `admin.html` Overview 카드 — "발송" → "**강제발송**" 으로 rename. force=True 가 기본. dry-run 체크박스는 유지.
 - [ ] (G7) `admin.html` 에 새 탭 **"History"** — `run_store.list_recent(20)` 결과 표시 (run_id 짧게 / 시작·종료 시각 / status / article_count / digest preview 첫 줄).
