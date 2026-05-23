@@ -43,6 +43,8 @@ class PipelineParams:
     gemini_model: str
     gmail_user: str
     gmail_password: str
+    # 도메인 → 사람 친화 매체명. summarize 의 출처 링크에 사용.
+    source_name_map: dict[str, str] = field(default_factory=dict)
     dry_run: bool = False
     num_results_per_keyword: int = 20  # Brave max — 더 많은 후보 확보
     max_articles_for_summary: int = 20
@@ -152,6 +154,7 @@ def run(params: PipelineParams, deps: PipelineDeps) -> PipelineResult:
             url=a.url,
             body_text=a.body_text,
             published_at=a.published_at,
+            source_name=params.source_name_map.get(a.source_domain),
         )
         for _, a in capped
     ]

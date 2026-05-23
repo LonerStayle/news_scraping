@@ -19,6 +19,7 @@ class SummaryInput:
     url: str
     body_text: str
     published_at: str | None = None
+    source_name: str | None = None  # 예: "TechCrunch". 없으면 source_domain 사용.
 
 
 @dataclass(frozen=True)
@@ -90,11 +91,27 @@ def summarize(
     text = _extract_text(response)
     if not text:
         raise RuntimeError("Gemini returned empty response")
+
+    # 모델 응답에 출처가 누락되거나 잘못 표시되어도 코드가 보장하는 출처 목록을
+    # 항상 메일 끝에 append. 대표님이 모든 기사 원문으로 클릭해 들어갈 수 있음.
+    sources_block = build_sources_section(articles)
+    full_digest = text.strip() + "\n\n" + sources_block
+
     return SummaryOutput(
-        digest_markdown=text.strip(),
+        digest_markdown=full_digest,
         model=model,
         article_count=len(articles),
     )
+
+
+def build_sources_section(articles: list[SummaryInput]) -> str:
+    """Gemini 응답에 무조건 append 되는 백업 출처 목록."""
+    lines = ["---", "", "## 오늘 다룬 기사 전체 목록", ""]
+    for a in articles:
+        label = a.source_name or a.source_domain
+        title = a.title.strip() or "(제목 없음)"
+        lines.append(f"- [{label}]({a.url}) — {title}")
+    return "\n".join(lines)
 
 
 def _extract_text(response: Any) -> str:

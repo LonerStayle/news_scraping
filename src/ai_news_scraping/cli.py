@@ -137,6 +137,7 @@ def build_params(
         gemini_model=settings.gemini_model,
         gmail_user=settings.gmail_user,
         gmail_password=settings.gmail_app_password,
+        source_name_map={s.domain: s.name for s in domain_cfg.sources},
         dry_run=dry_run,
     )
 
