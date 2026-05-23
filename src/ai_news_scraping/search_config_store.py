@@ -36,6 +36,33 @@ class SearchSettings:
     min_body_len: int = 300
 
 
+def _normalize_domain(raw: str) -> str:
+    """대표님이 admin Sources 에 매체 주소를 넣을 때 받을 수 있는 형식을 host 만으로 정규화.
+
+    허용: ``openai.com``, ``www.openai.com``, ``OpenAI.com``
+    거부 (ValueError): ``openai.com/research``, ``https://openai.com``,
+    ``openai.com?q=1``, ``openai.com:443`` — Brave Search 의 ``site:`` 연산자가
+    경로/스킴/쿼리/포트를 받지 못해 422 를 반환하기 때문 (실제 운영 사고 사례).
+
+    실수로 URL 통째로 붙여 넣어도 자동 정규화 X — 명시 reject 로 디버깅을 쉽게.
+    """
+    s = raw.strip().lower()
+    if not s:
+        raise ValueError(f"domain must be non-empty: {raw!r}")
+    s = s.removeprefix("www.")
+    # path / scheme / query / fragment / port — 전부 거부 (자동 잘라내기 X).
+    for bad_ch in ("/", ":", "?", "#", " "):
+        if bad_ch in s:
+            raise ValueError(
+                f"domain must be host only (no path/scheme/port/query): {raw!r}. "
+                "예) openai.com"
+            )
+    # 최소한의 host 모양 검증 — 점 1개 이상 + 영문/숫자/하이픈/점만.
+    if "." not in s or not all(c.isalnum() or c in "-." for c in s):
+        raise ValueError(f"invalid host format: {raw!r}. 예) openai.com")
+    return s
+
+
 # ════════════════════════════ KeywordStore ════════════════════════════
 
 
@@ -200,10 +227,8 @@ class InMemorySourceStore:
         return self._sorted()
 
     def add(self, domain: str, name: str) -> SourceRecord:
-        d = domain.strip().lower().removeprefix("www.")
+        d = _normalize_domain(domain)
         n = name.strip()
-        if not d:
-            raise ValueError(f"domain must be non-empty: {domain!r}")
         if not n:
             raise ValueError(f"name must be non-empty: {name!r}")
         for r in self._items.values():
@@ -238,9 +263,7 @@ class InMemorySourceStore:
         new_domain = cur.domain
         new_name = cur.name
         if domain is not None:
-            new_domain = domain.strip().lower().removeprefix("www.")
-            if not new_domain:
-                raise ValueError(f"domain must be non-empty: {domain!r}")
+            new_domain = _normalize_domain(domain)
         if name is not None:
             new_name = name.strip()
             if not new_name:
@@ -257,8 +280,13 @@ class InMemorySourceStore:
     def bulk_seed(self, sources: list[tuple[str, str]]) -> int:
         before = len(self._items)
         for domain, name in sources:
-            if domain.strip() and name.strip():
+            if not domain.strip() or not name.strip():
+                continue
+            try:
                 self.add(domain, name)
+            except ValueError:
+                # seed 의 잘못된 host 는 skip — Supabase 쪽과 동일 정책.
+                continue
         return len(self._items) - before
 
     def _sorted(self) -> list[SourceRecord]:
@@ -296,10 +324,8 @@ class SupabaseSourceStore:
         ]
 
     def add(self, domain: str, name: str) -> SourceRecord:
-        d = domain.strip().lower().removeprefix("www.")
+        d = _normalize_domain(domain)
         n = name.strip()
-        if not d:
-            raise ValueError(f"domain must be non-empty: {domain!r}")
         if not n:
             raise ValueError(f"name must be non-empty: {name!r}")
         resp = (
@@ -342,10 +368,7 @@ class SupabaseSourceStore:
     ) -> SourceRecord | None:
         payload: dict[str, Any] = {}
         if domain is not None:
-            cleaned = domain.strip().lower().removeprefix("www.")
-            if not cleaned:
-                raise ValueError(f"domain must be non-empty: {domain!r}")
-            payload["domain"] = cleaned
+            payload["domain"] = _normalize_domain(domain)
         if name is not None:
             cleaned_name = name.strip()
             if not cleaned_name:
@@ -369,15 +392,18 @@ class SupabaseSourceStore:
         )
 
     def bulk_seed(self, sources: list[tuple[str, str]]) -> int:
-        payload = [
-            {
-                "domain": d.strip().lower().removeprefix("www."),
-                "name": n.strip(),
-                "active": True,
-            }
-            for d, n in sources
-            if d.strip() and n.strip()
-        ]
+        payload: list[dict[str, Any]] = []
+        for d, n in sources:
+            if not d.strip() or not n.strip():
+                continue
+            try:
+                normalized = _normalize_domain(d)
+            except ValueError:
+                # seed (yaml) 에 잘못된 host 가 섞여 있으면 그 항목만 skip — 운영
+                # 시작 시 ralph 가 첫 cron 에서 자동 import 하는 경로라 raise 시
+                # 전체 seed 가 막힘. admin add/update 는 raise 그대로.
+                continue
+            payload.append({"domain": normalized, "name": n.strip(), "active": True})
         if not payload:
             return 0
         resp = self._table().upsert(payload, on_conflict="domain").execute()

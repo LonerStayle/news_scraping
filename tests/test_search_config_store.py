@@ -105,10 +105,48 @@ def test_in_memory_source_invalid() -> None:
         s.add("a.com", "")
 
 
+@pytest.mark.parametrize(
+    "bad_domain",
+    [
+        "openai.com/research",  # path
+        "https://openai.com",  # scheme
+        "openai.com:443",  # port
+        "openai.com?q=1",  # query
+        "open ai.com",  # space
+        "openai",  # no dot
+        "openai.com/",  # trailing slash
+    ],
+)
+def test_in_memory_source_rejects_non_host_input(bad_domain: str) -> None:
+    """Brave site: 연산자가 path/scheme/port/query 를 거부 → 입력 단에서 reject."""
+    s = InMemorySourceStore()
+    with pytest.raises(ValueError):
+        s.add(bad_domain, "X")
+
+
+def test_in_memory_source_update_rejects_path() -> None:
+    s = InMemorySourceStore()
+    r = s.add("a.com", "A")
+    with pytest.raises(ValueError):
+        s.update(r.id, domain="a.com/news")
+
+
 def test_in_memory_source_bulk_seed() -> None:
     s = InMemorySourceStore()
     n = s.bulk_seed([("a.com", "A"), ("b.com", "B"), ("", "C")])
     assert n == 2
+
+
+def test_in_memory_source_bulk_seed_skips_bad_hosts() -> None:
+    """seed (yaml 자동 import) 에 잘못된 host 가 섞여 있으면 그 항목만 skip — 전체 실패 X."""
+    s = InMemorySourceStore()
+    n = s.bulk_seed([
+        ("a.com", "A"),
+        ("openai.com/research", "Bad"),  # skipped
+        ("b.com", "B"),
+    ])
+    assert n == 2
+    assert {r.domain for r in s.list_all()} == {"a.com", "b.com"}
 
 
 def test_in_memory_source_update_all_fields() -> None:
