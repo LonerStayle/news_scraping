@@ -1,0 +1,10 @@
+# 검색 키워드 (CLAUDE.md §7: 5개)
+# 매일 발송 1회당 Google CSE 호출 수 = len(keywords) → 무료 cap (일 100) 안에서 유지.
+# 추가/수정 시 호출 수와 메일 본문 양에 직접 영향.
+
+keywords:
+  - "artificial intelligence"
+  - "large language model"
+  - "generative AI"
+  - "AI safety"
+  - "AI startup"

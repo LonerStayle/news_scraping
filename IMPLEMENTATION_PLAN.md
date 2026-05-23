@@ -13,7 +13,7 @@
 - [x] pyproject.toml + uv 환경 + src/tests 구조 + ruff/mypy/pytest 검증 명령 셋업
 - [x] `.env.example` 작성 — `GOOGLE_CSE_API_KEY`, `GOOGLE_CSE_CX`, `GEMINI_API_KEY`, `GMAIL_USER`, `GMAIL_APP_PASSWORD`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `ADMIN_TOKEN`
 - [x] `config.py` — pydantic-settings 로 환경변수 typed loader 작성
-- [ ] `keywords.yaml` + `sources.yaml` — 검색 키워드 5개 + 영어권 AI 매체 10개 화이트리스트 (도메인 분리용 config-driven)
+- [x] `keywords.yaml` + `sources.yaml` — 검색 키워드 5개 + 영어권 AI 매체 10개 화이트리스트 (도메인 분리용 config-driven) — `domains/ai_news/` + `domain_config.py` 로더
 - [ ] Supabase 스키마 정의 — `articles` (url unique, title, source, published_at, raw_html_excerpt, body_text, fetched_at), `subscribers` (email, active), `runs` (run_id, started_at, finished_at, article_count, status, error), `scrape_enabled` (단일 row 토글)
 
 ### Phase B — 도메인 파이프라인 (재사용 가능 구조)

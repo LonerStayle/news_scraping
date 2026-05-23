@@ -1,0 +1,25 @@
+# 영어권 AI 매체 화이트리스트 (CLAUDE.md §7: 10개)
+# Google Custom Search 의 site:(d1 OR d2 OR ...) 필터로 묶어 키워드당 1 호출.
+# trafilatura 본문 추출이 반복 실패하는 매체는 운영 중 제거 (extract.py 가 로그).
+
+sources:
+  - domain: techcrunch.com
+    name: TechCrunch
+  - domain: theverge.com
+    name: The Verge
+  - domain: arstechnica.com
+    name: Ars Technica
+  - domain: wired.com
+    name: Wired
+  - domain: venturebeat.com
+    name: VentureBeat
+  - domain: technologyreview.com
+    name: MIT Technology Review
+  - domain: spectrum.ieee.org
+    name: IEEE Spectrum
+  - domain: openai.com
+    name: OpenAI Blog
+  - domain: anthropic.com
+    name: Anthropic
+  - domain: deepmind.google
+    name: Google DeepMind
