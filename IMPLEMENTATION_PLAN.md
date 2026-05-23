@@ -67,7 +67,7 @@
 - [x] (G3) `pipeline.py` 가 `RunStore` 받아서 run 시작 (status=running) / 종료 (success|failed|skipped, article_count, digest_text) 기록. PipelineDeps 에 run_store 추가. 예외 시 runs.error 기록.
 - [x] (G4) `cli.run_command` 에 `force: bool=False` 인자 추가. force=True 면 `run_store.get_last_success()` → `article_store.delete_by_run_id(last.run_id)` → 새 run 진행.
 - [x] (G5) `admin.py` POST `/run-now` 에 `force: bool=True` Form (기본값) 추가. run_pipeline callback 시그니처 `(dry_run, force)` 로 확장. cli closure 가 force 전달.
-- [ ] (G6) `admin.html` Overview 카드 — "발송" → "**강제발송**" 으로 rename. force=True 가 기본. dry-run 체크박스는 유지.
+- [x] (G6) `admin.html` Overview 카드 — "발송" → "**강제발송**" 으로 rename. force=True hidden input + dry-run 체크박스 유지. 토스트 메시지 4종 (force / live / dry-force / dry).
 - [ ] (G7) `admin.html` 에 새 탭 **"History"** — `run_store.list_recent(20)` 결과 표시 (run_id 짧게 / 시작·종료 시각 / status / article_count / digest preview 첫 줄).
 - [ ] (G8) 테스트 일괄 + CLAUDE.md §6 / setup-guide.html / README.md 의 admin 운영 흐름 갱신.
 

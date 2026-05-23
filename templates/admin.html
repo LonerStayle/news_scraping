@@ -245,9 +245,10 @@
     <div class="card">
       <div class="card-row">
         <div>
-          <h2 style="margin: 0;">지금 보내기</h2>
+          <h2 style="margin: 0;">강제발송</h2>
           <div style="color: var(--muted); font-size: 0.85rem; margin-top: 0.2rem;">
-            cron 안 기다리고 즉시 발송. 백그라운드 실행이라 페이지가 안 멈춥니다 (1~3분 소요).
+            직전 발송의 기사들을 DB 에서 삭제하고 새로 검색·발송합니다 (cron 안 기다림).
+            <br>같은 기사가 dedup 으로 막혀 있어도 신선한 결과 보장. 백그라운드 실행 (1~3분).
           </div>
         </div>
         <form method="post" action="/run-now" style="display: flex; gap: 0.6rem; align-items: center;">
@@ -255,7 +256,8 @@
             <input type="checkbox" name="dry_run" value="true">
             dry-run (메일 발송 X)
           </label>
-          <button type="submit" class="primary">▶ 발송</button>
+          <input type="hidden" name="force" value="true">
+          <button type="submit" class="primary">▶ 강제발송</button>
         </form>
       </div>
     </div>
@@ -437,11 +439,15 @@
     const triggered = qs.get('triggered');
     if (triggered) {
       const hint = document.getElementById('hash-hint');
-      hint.textContent = triggered === 'dry'
-        ? '🚀 dry-run 발송 시작 (메일은 발송 안 됨, 1~3분 소요)'
-        : '🚀 실 발송 시작! 메일함 확인 (1~3분 소요)';
+      const msg = {
+        'force':     '🚀 강제발송 시작! 직전 기사 삭제 후 새로 검색·발송 중 (1~3분)',
+        'live':      '🚀 발송 시작! 메일함 확인 (1~3분)',
+        'dry-force': '🧪 강제 dry-run (직전 기사 삭제 + 검색·요약, 메일 발송 X)',
+        'dry':       '🧪 dry-run 시작 (메일 발송 X, 1~3분)',
+      }[triggered] || '🚀 발송 트리거';
+      hint.textContent = msg;
       hint.classList.add('show');
-      setTimeout(() => hint.classList.remove('show'), 4000);
+      setTimeout(() => hint.classList.remove('show'), 5000);
       // URL 정리 — 새로고침 시 또 안 뜨게
       history.replaceState(null, '', location.pathname + location.hash);
     }
