@@ -27,8 +27,9 @@
 
 ### Phase C — Admin (심플)
 
-- [ ] `admin.py` — FastAPI 앱. 단일 HTML 페이지 (Jinja2 template) — 스크래핑 ON/OFF 토글 버튼 + 구독자 명단 추가/제거 form. `ADMIN_TOKEN` 으로 단순 인증.
-- [ ] `templates/admin.html` — 1 파일 HTML (React 안 씀)
+- [x] `admin.py` — FastAPI 앱. 단일 HTML 페이지 (Jinja2 template) — 스크래핑 ON/OFF 토글 버튼 + 구독자 명단 추가/제거 form. `ADMIN_TOKEN` 으로 단순 인증.
+- [x] `templates/admin.html` — 1 파일 HTML (React 안 씀)
+- [x] (bonus) `subscriber_store.py` + `scrape_state_store.py` — admin 의존성, ArticleStore 와 동일 패턴 (InMemory + Supabase)
 
 ### Phase D — 운영 & 자동화
 
