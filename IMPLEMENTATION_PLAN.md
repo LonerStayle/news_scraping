@@ -33,7 +33,7 @@
 
 ### Phase D — 운영 & 자동화
 
-- [ ] `cli.py` — `python -m ai_news_scraping.cli run` 진입점. `--dry-run` 옵션.
+- [x] `cli.py` — `python -m ai_news_scraping.cli run` 진입점. `--dry-run` 옵션.
 - [ ] `.github/workflows/daily-digest.yml` — cron `40 23 * * *` (UTC = 08:40 KST) + 수동 트리거. secrets 주입.
 - [ ] `tests/` — 각 wrapper 단위 테스트 (mock 외부 API) + pipeline 통합 smoke test
 - [ ] `README.md` 갱신 — 셋업 / secrets 등록 / 로컬 dry-run / 운영 가이드
