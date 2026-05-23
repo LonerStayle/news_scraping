@@ -124,13 +124,41 @@ def _entry_admin(*, host: str, port: int) -> int:
     client = _make_supabase_client(settings)
     schema = settings.supabase_schema
 
+    article_store = SupabaseArticleStore(client, schema=schema)
+    sub_store = SupabaseSubscriberStore(client, schema=schema)
+    scrape_store = SupabaseScrapeStateStore(client, schema=schema)
+    keyword_store = SupabaseKeywordStore(client, schema=schema)
+    source_store = SupabaseSourceStore(client, schema=schema)
+    settings_store = SupabaseSettingsStore(client, schema=schema)
+
+    # admin 의 "지금 보내기" 가 호출할 closure — settings + stores 를 캡쳐.
+    domain_cfg = load_domain("ai_news")
+
+    def run_pipeline_now(dry_run: bool = False) -> int:
+        try:
+            return run_command(
+                settings=settings,
+                domain_cfg=domain_cfg,
+                article_store=article_store,
+                sub_store=sub_store,
+                scrape_store=scrape_store,
+                keyword_store=keyword_store,
+                source_store=source_store,
+                settings_store=settings_store,
+                dry_run=dry_run,
+            )
+        except Exception:
+            logger.exception("run_pipeline_now failed")
+            return 1
+
     app = create_app(
         admin_token=settings.admin_token,
-        subscriber_store=SupabaseSubscriberStore(client, schema=schema),
-        scrape_state_store=SupabaseScrapeStateStore(client, schema=schema),
-        keyword_store=SupabaseKeywordStore(client, schema=schema),
-        source_store=SupabaseSourceStore(client, schema=schema),
-        settings_store=SupabaseSettingsStore(client, schema=schema),
+        subscriber_store=sub_store,
+        scrape_state_store=scrape_store,
+        keyword_store=keyword_store,
+        source_store=source_store,
+        settings_store=settings_store,
+        run_pipeline=run_pipeline_now,
         auth_enabled=settings.admin_auth_enabled,
     )
     logger.info("admin server starting at http://%s:%d", host, port)

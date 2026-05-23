@@ -243,6 +243,24 @@
     </div>
 
     <div class="card">
+      <div class="card-row">
+        <div>
+          <h2 style="margin: 0;">지금 보내기</h2>
+          <div style="color: var(--muted); font-size: 0.85rem; margin-top: 0.2rem;">
+            cron 안 기다리고 즉시 발송. 백그라운드 실행이라 페이지가 안 멈춥니다 (1~3분 소요).
+          </div>
+        </div>
+        <form method="post" action="/run-now" style="display: flex; gap: 0.6rem; align-items: center;">
+          <label style="font-size: 0.85rem; color: var(--muted); cursor: pointer;">
+            <input type="checkbox" name="dry_run" value="true">
+            dry-run (메일 발송 X)
+          </label>
+          <button type="submit" class="primary">▶ 발송</button>
+        </form>
+      </div>
+    </div>
+
+    <div class="card">
       <h2>요약</h2>
       <table>
         <tr><td>구독자</td><td><strong>{{ subscribers|length }}명</strong> ({{ subscribers|selectattr("active")|list|length }} active)</td></tr>
@@ -414,6 +432,20 @@
   <div class="hash-hint" id="hash-hint"></div>
 
   <script>
+    // ───── Triggered toast (after /run-now redirect) ─────
+    const qs = new URLSearchParams(location.search);
+    const triggered = qs.get('triggered');
+    if (triggered) {
+      const hint = document.getElementById('hash-hint');
+      hint.textContent = triggered === 'dry'
+        ? '🚀 dry-run 발송 시작 (메일은 발송 안 됨, 1~3분 소요)'
+        : '🚀 실 발송 시작! 메일함 확인 (1~3분 소요)';
+      hint.classList.add('show');
+      setTimeout(() => hint.classList.remove('show'), 4000);
+      // URL 정리 — 새로고침 시 또 안 뜨게
+      history.replaceState(null, '', location.pathname + location.hash);
+    }
+
     // Tab switching + hash deep-link
     const tabs = document.querySelectorAll('.tab');
     const panels = document.querySelectorAll('.panel');

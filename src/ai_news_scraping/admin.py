@@ -8,10 +8,19 @@ React/SPA 안 씀 — Jinja2 단일 HTML 페이지.
 from __future__ import annotations
 
 import secrets
+from collections.abc import Callable
 from pathlib import Path
 from typing import Annotated, Any
 
-from fastapi import Depends, FastAPI, Form, HTTPException, Request, status
+from fastapi import (
+    BackgroundTasks,
+    Depends,
+    FastAPI,
+    Form,
+    HTTPException,
+    Request,
+    status,
+)
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.templating import Jinja2Templates
@@ -37,6 +46,7 @@ def create_app(
     keyword_store: KeywordStore | None = None,
     source_store: SourceStore | None = None,
     settings_store: SettingsStore | None = None,
+    run_pipeline: Callable[[bool], Any] | None = None,
     auth_enabled: bool = True,
     templates_dir: Path | None = None,
 ) -> FastAPI:
@@ -154,6 +164,23 @@ def create_app(
             raise HTTPException(status_code=404, detail="source not found")
         source_store.set_active(source_id, not current.active)
         return RedirectResponse(url="/", status_code=status.HTTP_303_SEE_OTHER)
+
+    # ────────── 즉시 발송 (지금 보내기) ──────────
+
+    @app.post("/run-now", dependencies=auth_dep)
+    def run_now(
+        background: BackgroundTasks,
+        dry_run: Annotated[bool, Form()] = False,
+    ) -> RedirectResponse:
+        if run_pipeline is None:
+            raise HTTPException(
+                status_code=503, detail="run_pipeline not configured"
+            )
+        background.add_task(run_pipeline, dry_run)
+        flag = "dry" if dry_run else "live"
+        return RedirectResponse(
+            url=f"/?triggered={flag}", status_code=status.HTTP_303_SEE_OTHER
+        )
 
     # ────────── Settings 라우트 (Phase F7) ──────────
 
