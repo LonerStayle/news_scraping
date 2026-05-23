@@ -22,6 +22,12 @@ __pycache__/
 *.pyc
 .venv/
 .uv/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+
+# ralph-loop local state
+.claude/ralph-loop.local.md
 
 # node
 node_modules/

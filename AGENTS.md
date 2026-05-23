@@ -7,19 +7,16 @@
 
 ## 환경 사전조건
 
-<!-- 도메인에 맞게 채우십시오. 사용자가 직접 채우거나, ralph 첫 iteration 이 채웁니다.
-     비어 있으면 ralph 의 backpressure (검증) 가 작동하지 못하므로 결국 채워져야 합니다. -->
-
-- 운영체제:
-- 런타임 버전:
-- 패키지 매니저:
+- 운영체제: macOS / Linux (GitHub Actions ubuntu-latest)
+- 런타임: Python >=3.11 (uv 가 자동 관리, 현재 .venv 는 3.12.x)
+- 패키지 매니저: **uv** (>=0.9). `brew install uv` 또는 https://docs.astral.sh/uv/
 
 ---
 
 ## 셋업 (1회)
 
 ```bash
-# 예) uv sync && cd web && npm ci
+uv sync --dev
 ```
 
 ---
@@ -30,13 +27,13 @@
 
 ```bash
 # 1) lint
-# 예) ruff check . && (cd web && npm run lint)
+uv run ruff check .
 
 # 2) typecheck
-# 예) mypy . && (cd web && npm run typecheck)
+uv run mypy
 
 # 3) tests
-# 예) pytest -q && (cd web && npm run test -- --run)
+uv run pytest
 ```
 
 ---
@@ -44,7 +41,11 @@
 ## 선택 검증
 
 ```bash
-# 예) e2e, 빌드, 보안 스캔 등
+# 포맷 자동 정리
+uv run ruff format .
+
+# 도메인 파이프라인 dry-run (env 셋업 후)
+# uv run python -m ai_news_scraping.cli run --dry-run
 ```
 
 ---
@@ -52,5 +53,9 @@
 ## 실행 (로컬 확인용)
 
 ```bash
-# 예) uvicorn app.main:app --reload
+# admin 페이지 (스크래핑 ON/OFF + 구독자 form)
+# uv run uvicorn ai_news_scraping.admin:app --reload --port 8000
+
+# 수동 1회 발송 트리거 (cron 대신 직접 실행)
+# uv run python -m ai_news_scraping.cli run
 ```
