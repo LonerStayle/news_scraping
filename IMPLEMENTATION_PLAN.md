@@ -20,7 +20,7 @@
 
 - [x] `search.py` — Google Custom Search API 호출 wrapper. `q=keyword site:(d1 OR d2 ...) tbs=qdr:d` 한 호출에 매체 묶음. 키워드별 1 호출.
 - [x] `extract.py` — trafilatura 본문 추출 wrapper. URL → (title, body_text). 실패 시 예외 + 화이트리스트 자동 제외 로그.
-- [ ] `store.py` — Supabase 클라이언트로 article upsert (url unique), dedup 처리
+- [x] `store.py` — Supabase 클라이언트로 article upsert (url unique), dedup 처리
 - [ ] `summarize.py` — Gemini API 호출 wrapper. 영문 본문 N개 → 한국어 통합 트렌드 요약 (10~20건 기준)
 - [ ] `mail.py` — Gmail SMTP 발송 wrapper. 구독자 명단 BCC 일괄 발송. 제목·본문 템플릿.
 - [ ] `pipeline.py` — Phase B 모든 단계 orchestration. `run()` 단일 entry point.
