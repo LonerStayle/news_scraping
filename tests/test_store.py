@@ -56,6 +56,25 @@ def test_in_memory_upsert_overwrites_latest_run() -> None:
     assert store.articles["https://x.com/a"].run_id == "r2"
 
 
+def test_in_memory_delete_by_run_id() -> None:
+    store = InMemoryArticleStore()
+    store.upsert_article(_make_article(url="https://x.com/1"), keyword="k", run_id="r1")
+    store.upsert_article(_make_article(url="https://x.com/2"), keyword="k", run_id="r1")
+    store.upsert_article(_make_article(url="https://x.com/3"), keyword="k", run_id="r2")
+    n = store.delete_by_run_id("r1")
+    assert n == 2
+    remaining = list(store.articles.keys())
+    assert remaining == ["https://x.com/3"]
+
+
+def test_in_memory_delete_by_run_id_missing() -> None:
+    store = InMemoryArticleStore()
+    store.upsert_article(_make_article(), keyword="k", run_id="r1")
+    n = store.delete_by_run_id("no-such-run")
+    assert n == 0
+    assert len(store.articles) == 1
+
+
 # ────────── SupabaseArticleStore — fluent mock ──────────
 
 
@@ -71,8 +90,11 @@ class FakeQuery:
     selected_cols: tuple[str, ...] = ()
     filter_col: str | None = None
     filter_values: list[str] | None = None
+    eq_col: str | None = None
+    eq_val: Any = None
     upserted: dict[str, Any] | None = None
     upsert_on_conflict: str | None = None
+    deleted: bool = False
     response: FakeResponse = field(default_factory=FakeResponse)
 
     def select(self, *cols: str) -> FakeQuery:
@@ -84,11 +106,20 @@ class FakeQuery:
         self.filter_values = values
         return self
 
+    def eq(self, col: str, val: Any) -> FakeQuery:
+        self.eq_col = col
+        self.eq_val = val
+        return self
+
     def upsert(
         self, payload: dict[str, Any], *, on_conflict: str | None = None
     ) -> FakeQuery:
         self.upserted = payload
         self.upsert_on_conflict = on_conflict
+        return self
+
+    def delete(self) -> FakeQuery:
+        self.deleted = True
         return self
 
     def execute(self) -> FakeResponse:
@@ -134,6 +165,22 @@ def test_supabase_existing_urls_handles_none_data() -> None:
     fake = FakeSupabaseClient(query=FakeQuery(response=FakeResponse(data=None)))
     store = SupabaseArticleStore(fake)
     assert store.existing_urls(["https://x.com/a"]) == set()
+
+
+def test_supabase_delete_by_run_id() -> None:
+    fake = FakeSupabaseClient(
+        query=FakeQuery(response=FakeResponse(data=[{"id": 1}, {"id": 2}]))
+    )
+    store = SupabaseArticleStore(fake)
+    n = store.delete_by_run_id("r1")
+    assert n == 2
+    assert fake.table_name == "articles"
+
+
+def test_supabase_delete_by_run_id_returns_zero_when_no_rows() -> None:
+    fake = FakeSupabaseClient(query=FakeQuery(response=FakeResponse(data=[])))
+    store = SupabaseArticleStore(fake)
+    assert store.delete_by_run_id("r1") == 0
 
 
 def test_supabase_upsert_article_sends_full_payload() -> None:

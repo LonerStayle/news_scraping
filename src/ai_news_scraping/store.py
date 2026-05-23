@@ -36,6 +36,7 @@ class ArticleStore(Protocol):
     def upsert_article(
         self, article: ExtractedArticle, *, keyword: str, run_id: str
     ) -> None: ...
+    def delete_by_run_id(self, run_id: str) -> int: ...
 
 
 class InMemoryArticleStore:
@@ -60,6 +61,14 @@ class InMemoryArticleStore:
             keyword=keyword,
             run_id=run_id,
         )
+
+    def delete_by_run_id(self, run_id: str) -> int:
+        to_remove = [
+            url for url, a in self._articles.items() if a.run_id == run_id
+        ]
+        for url in to_remove:
+            del self._articles[url]
+        return len(to_remove)
 
     @property
     def articles(self) -> dict[str, StoredArticle]:
@@ -107,3 +116,13 @@ class SupabaseArticleStore:
             .upsert(payload, on_conflict="url")
             .execute()
         )
+
+    def delete_by_run_id(self, run_id: str) -> int:
+        resp = (
+            self._table("articles")
+            .delete()
+            .eq("run_id", run_id)
+            .execute()
+        )
+        rows = getattr(resp, "data", None) or []
+        return len(rows)
