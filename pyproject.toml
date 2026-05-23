@@ -4,7 +4,9 @@ version = "0.1.0"
 description = "Daily AI news scraper that emails a Korean trend digest to a small group via GitHub Actions cron"
 readme = "README.md"
 requires-python = ">=3.11"
-dependencies = []
+dependencies = [
+    "pydantic-settings>=2.14.1",
+]
 
 [dependency-groups]
 dev = [
