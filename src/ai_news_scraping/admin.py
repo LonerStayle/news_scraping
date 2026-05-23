@@ -31,6 +31,12 @@ from .subscriber_store import SubscriberStore
 
 DEFAULT_TEMPLATES_DIR = Path(__file__).resolve().parents[2] / "templates"
 
+
+def _format_trigger_flag(*, dry_run: bool, force: bool) -> str:
+    if dry_run:
+        return "dry-force" if force else "dry"
+    return "force" if force else "live"
+
 # Module-level so FastAPI's dependency resolution can statically inspect it.
 # (Closure-scoped HTTPBasic() caused credentials to be mis-classified as a
 #  query param under fastapi 0.136 / starlette 1.0.)
@@ -46,7 +52,8 @@ def create_app(
     keyword_store: KeywordStore | None = None,
     source_store: SourceStore | None = None,
     settings_store: SettingsStore | None = None,
-    run_pipeline: Callable[[bool], Any] | None = None,
+    # run_pipeline(dry_run, force) — 강제발송 시 force=True 로 직전 run article 삭제.
+    run_pipeline: Callable[[bool, bool], Any] | None = None,
     auth_enabled: bool = True,
     templates_dir: Path | None = None,
 ) -> FastAPI:
@@ -171,13 +178,14 @@ def create_app(
     def run_now(
         background: BackgroundTasks,
         dry_run: Annotated[bool, Form()] = False,
+        force: Annotated[bool, Form()] = True,  # admin "강제발송" 기본값
     ) -> RedirectResponse:
         if run_pipeline is None:
             raise HTTPException(
                 status_code=503, detail="run_pipeline not configured"
             )
-        background.add_task(run_pipeline, dry_run)
-        flag = "dry" if dry_run else "live"
+        background.add_task(run_pipeline, dry_run, force)
+        flag = _format_trigger_flag(dry_run=dry_run, force=force)
         return RedirectResponse(
             url=f"/?triggered={flag}", status_code=status.HTTP_303_SEE_OTHER
         )

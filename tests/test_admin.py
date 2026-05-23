@@ -424,3 +424,74 @@ def test_settings_route_503_when_store_missing() -> None:
         "/settings", auth=AUTH, data={"freshness": "pd"}, follow_redirects=False
     )
     assert resp.status_code == 503
+
+
+# ────────── /run-now (G5) ──────────
+
+
+def test_run_now_invokes_pipeline_callback_with_dry_run_and_force() -> None:
+    calls: list[tuple[bool, bool]] = []
+
+    def fake_pipeline(dry_run: bool, force: bool) -> None:
+        calls.append((dry_run, force))
+
+    app = create_app(
+        admin_token=ADMIN_TOKEN,
+        subscriber_store=InMemorySubscriberStore(),
+        scrape_state_store=InMemoryScrapeStateStore(),
+        run_pipeline=fake_pipeline,
+    )
+    client = TestClient(app)
+    resp = client.post(
+        "/run-now", auth=AUTH,
+        data={"dry_run": "true", "force": "true"},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 303
+    assert "triggered=dry-force" in resp.headers["location"]
+    # BackgroundTasks 는 TestClient 가 응답 후 즉시 실행 → 1회 호출됨
+    assert calls == [(True, True)]
+
+
+def test_run_now_default_is_force_live() -> None:
+    calls: list[tuple[bool, bool]] = []
+
+    def fake_pipeline(dry_run: bool, force: bool) -> None:
+        calls.append((dry_run, force))
+
+    app = create_app(
+        admin_token=ADMIN_TOKEN,
+        subscriber_store=InMemorySubscriberStore(),
+        scrape_state_store=InMemoryScrapeStateStore(),
+        run_pipeline=fake_pipeline,
+    )
+    client = TestClient(app)
+    # 폼 안 보내면 기본값 사용 (dry_run=False, force=True)
+    resp = client.post("/run-now", auth=AUTH, data={}, follow_redirects=False)
+    assert resp.status_code == 303
+    assert "triggered=force" in resp.headers["location"]
+    assert calls == [(False, True)]
+
+
+def test_run_now_503_when_callback_not_configured() -> None:
+    app = create_app(
+        admin_token=ADMIN_TOKEN,
+        subscriber_store=InMemorySubscriberStore(),
+        scrape_state_store=InMemoryScrapeStateStore(),
+        run_pipeline=None,
+    )
+    client = TestClient(app)
+    resp = client.post("/run-now", auth=AUTH, data={}, follow_redirects=False)
+    assert resp.status_code == 503
+
+
+def test_run_now_requires_auth() -> None:
+    app = create_app(
+        admin_token=ADMIN_TOKEN,
+        subscriber_store=InMemorySubscriberStore(),
+        scrape_state_store=InMemoryScrapeStateStore(),
+        run_pipeline=lambda dr, f: None,
+    )
+    client = TestClient(app)
+    resp = client.post("/run-now", data={}, follow_redirects=False)
+    assert resp.status_code == 401
