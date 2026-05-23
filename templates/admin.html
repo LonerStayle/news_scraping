@@ -132,5 +132,41 @@
   {% else %}
     <div class="empty">등록된 키워드가 없습니다. (DB 가 비어 있으면 cron 실행 시 yaml seed 가 자동 import 됩니다.)</div>
   {% endif %}
+
+  <h2>매체 화이트리스트 ({{ sources|length }}개, active {{ sources|selectattr("active")|list|length }}개)</h2>
+
+  <form class="add-form" method="post" action="/sources">
+    <input type="text" name="domain" required placeholder="예) techcrunch.com">
+    <input type="text" name="name" required placeholder="예) TechCrunch">
+    <button type="submit" class="primary">추가</button>
+  </form>
+
+  {% if sources %}
+    <table>
+      <thead>
+        <tr><th>ID</th><th>Domain</th><th>Name</th><th>Active</th><th></th></tr>
+      </thead>
+      <tbody>
+        {% for s in sources %}
+          <tr>
+            <td>{{ s.id }}</td>
+            <td>{{ s.domain }}</td>
+            <td>{{ s.name }}</td>
+            <td>{{ "✔︎" if s.active else "—" }}</td>
+            <td>
+              <form class="inline" method="post" action="/sources/{{ s.id }}/toggle">
+                <button type="submit">토글</button>
+              </form>
+              <form class="inline" method="post" action="/sources/{{ s.id }}/delete">
+                <button type="submit" class="danger">삭제</button>
+              </form>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <div class="empty">등록된 매체가 없습니다. (DB 가 비어 있으면 cron 실행 시 yaml seed 가 자동 import 됩니다.)</div>
+  {% endif %}
 </body>
 </html>

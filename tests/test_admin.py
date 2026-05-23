@@ -7,7 +7,10 @@ from fastapi.testclient import TestClient
 
 from ai_news_scraping.admin import create_app
 from ai_news_scraping.scrape_state_store import InMemoryScrapeStateStore
-from ai_news_scraping.search_config_store import InMemoryKeywordStore
+from ai_news_scraping.search_config_store import (
+    InMemoryKeywordStore,
+    InMemorySourceStore,
+)
 from ai_news_scraping.subscriber_store import InMemorySubscriberStore
 
 ADMIN_TOKEN = "test-token"
@@ -20,6 +23,7 @@ class AdminCtx:
     sub_store: InMemorySubscriberStore
     scrape_store: InMemoryScrapeStateStore
     keyword_store: InMemoryKeywordStore
+    source_store: InMemorySourceStore
 
 
 @pytest.fixture
@@ -27,17 +31,20 @@ def ctx() -> AdminCtx:
     sub_store = InMemorySubscriberStore()
     scrape_store = InMemoryScrapeStateStore(initial=True)
     keyword_store = InMemoryKeywordStore()
+    source_store = InMemorySourceStore()
     app = create_app(
         admin_token=ADMIN_TOKEN,
         subscriber_store=sub_store,
         scrape_state_store=scrape_store,
         keyword_store=keyword_store,
+        source_store=source_store,
     )
     return AdminCtx(
         client=TestClient(app),
         sub_store=sub_store,
         scrape_store=scrape_store,
         keyword_store=keyword_store,
+        source_store=source_store,
     )
 
 
@@ -222,5 +229,102 @@ def test_keyword_routes_503_when_store_missing() -> None:
     client = TestClient(app)
     resp = client.post(
         "/keywords", auth=AUTH, data={"keyword": "AI"}, follow_redirects=False
+    )
+    assert resp.status_code == 503
+
+
+# ────────── Sources (F6) ──────────
+
+
+def test_add_source(ctx: AdminCtx) -> None:
+    resp = ctx.client.post(
+        "/sources", auth=AUTH,
+        data={"domain": "techcrunch.com", "name": "TechCrunch"},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 303
+    recs = ctx.source_store.list_active()
+    assert len(recs) == 1
+    assert recs[0].domain == "techcrunch.com"
+    assert recs[0].name == "TechCrunch"
+
+
+def test_add_source_strips_www(ctx: AdminCtx) -> None:
+    ctx.client.post(
+        "/sources", auth=AUTH,
+        data={"domain": "www.theverge.com", "name": "The Verge"},
+        follow_redirects=False,
+    )
+    assert ctx.source_store.list_all()[0].domain == "theverge.com"
+
+
+def test_add_source_invalid_returns_400(ctx: AdminCtx) -> None:
+    resp = ctx.client.post(
+        "/sources", auth=AUTH,
+        data={"domain": "  ", "name": "X"},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 400
+
+
+def test_add_source_requires_auth(ctx: AdminCtx) -> None:
+    resp = ctx.client.post(
+        "/sources", data={"domain": "a.com", "name": "A"},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 401
+
+
+def test_remove_source(ctx: AdminCtx) -> None:
+    rec = ctx.source_store.add("a.com", "A")
+    resp = ctx.client.post(
+        f"/sources/{rec.id}/delete", auth=AUTH, follow_redirects=False
+    )
+    assert resp.status_code == 303
+    assert ctx.source_store.list_all() == []
+
+
+def test_toggle_source_flips_active(ctx: AdminCtx) -> None:
+    rec = ctx.source_store.add("a.com", "A")
+    ctx.client.post(
+        f"/sources/{rec.id}/toggle", auth=AUTH, follow_redirects=False
+    )
+    assert ctx.source_store.list_all()[0].active is False
+    ctx.client.post(
+        f"/sources/{rec.id}/toggle", auth=AUTH, follow_redirects=False
+    )
+    assert ctx.source_store.list_all()[0].active is True
+
+
+def test_toggle_source_unknown_id_returns_404(ctx: AdminCtx) -> None:
+    resp = ctx.client.post(
+        "/sources/999/toggle", auth=AUTH, follow_redirects=False
+    )
+    assert resp.status_code == 404
+
+
+def test_index_renders_sources(ctx: AdminCtx) -> None:
+    ctx.source_store.add("techcrunch.com", "TechCrunch")
+    ctx.source_store.add("theverge.com", "The Verge")
+    resp = ctx.client.get("/", auth=AUTH)
+    assert "techcrunch.com" in resp.text
+    assert "TechCrunch" in resp.text
+    assert "The Verge" in resp.text
+    assert "2개" in resp.text
+
+
+def test_source_routes_503_when_store_missing() -> None:
+    app = create_app(
+        admin_token=ADMIN_TOKEN,
+        subscriber_store=InMemorySubscriberStore(),
+        scrape_state_store=InMemoryScrapeStateStore(),
+        keyword_store=None,
+        source_store=None,
+    )
+    client = TestClient(app)
+    resp = client.post(
+        "/sources", auth=AUTH,
+        data={"domain": "a.com", "name": "A"},
+        follow_redirects=False,
     )
     assert resp.status_code == 503

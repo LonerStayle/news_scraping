@@ -48,7 +48,7 @@
 - [x] (F3) `search_config_loader.py` 신규 — `load_search_config(stores, yaml_fallback) -> LoadedConfig` 헬퍼 (DB 우선, yaml fallback). pipeline.py 는 PipelineParams 매핑만 받으므로 변경 X — cli 가 loader 결과를 PipelineParams 로 빌드 (F4).
 - [x] (F4) `cli.py` 의 `_entry_run` 이 store 들 초기화 + seed (DB 비었으면 yaml 에서 자동 import 1회) + loader 호출 → build_params
 - [x] (F5) `admin.py` 키워드 라우트 — `POST /keywords` (add), `POST /keywords/{id}/delete`, `POST /keywords/{id}/toggle`. GET 은 메인 페이지 `/` 에 통합.
-- [ ] (F6) `admin.py` 매체 라우트 — `GET /sources`, `POST /sources` (domain + name), `POST /sources/{id}/delete`, `POST /sources/{id}/toggle`
+- [x] (F6) `admin.py` 매체 라우트 — `POST /sources` (domain + name), `POST /sources/{id}/delete`, `POST /sources/{id}/toggle`. GET 은 `/` 통합.
 - [ ] (F7) `admin.py` 설정 라우트 — `GET /settings`, `POST /settings` (freshness / num_results / max_articles / min_body_len 일괄 update)
 - [ ] (F8) `templates/admin.html` 탭 구조로 개편 — Overview / Keywords / Sources / Settings 4 탭
 - [ ] (F9) 통합 smoke test 갱신 — DB store 로 운영 조건 로드되는 케이스 추가

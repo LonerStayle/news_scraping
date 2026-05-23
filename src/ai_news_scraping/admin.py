@@ -17,7 +17,7 @@ from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.templating import Jinja2Templates
 
 from .scrape_state_store import ScrapeStateStore
-from .search_config_store import KeywordStore
+from .search_config_store import KeywordStore, SourceStore
 from .subscriber_store import SubscriberStore
 
 DEFAULT_TEMPLATES_DIR = Path(__file__).resolve().parents[2] / "templates"
@@ -35,6 +35,7 @@ def create_app(
     subscriber_store: SubscriberStore,
     scrape_state_store: ScrapeStateStore,
     keyword_store: KeywordStore | None = None,
+    source_store: SourceStore | None = None,
     templates_dir: Path | None = None,
 ) -> FastAPI:
     app = FastAPI(title="ai_news_scraping admin")
@@ -60,6 +61,7 @@ def create_app(
                 "scrape_enabled": scrape_state_store.is_enabled(),
                 "subscribers": subscriber_store.list_all(),
                 "keywords": keyword_store.list_all() if keyword_store else [],
+                "sources": source_store.list_all() if source_store else [],
             },
         )
 
@@ -110,6 +112,40 @@ def create_app(
         if current is None:
             raise HTTPException(status_code=404, detail="keyword not found")
         keyword_store.set_active(keyword_id, not current.active)
+        return RedirectResponse(url="/", status_code=status.HTTP_303_SEE_OTHER)
+
+    # ────────── Source 라우트 (Phase F6) ──────────
+
+    @app.post("/sources", dependencies=auth_dep)
+    def add_source(
+        domain: Annotated[str, Form()],
+        name: Annotated[str, Form()],
+    ) -> RedirectResponse:
+        if source_store is None:
+            raise HTTPException(status_code=503, detail="source store not configured")
+        try:
+            source_store.add(domain, name)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
+        return RedirectResponse(url="/", status_code=status.HTTP_303_SEE_OTHER)
+
+    @app.post("/sources/{source_id}/delete", dependencies=auth_dep)
+    def remove_source(source_id: int) -> RedirectResponse:
+        if source_store is None:
+            raise HTTPException(status_code=503, detail="source store not configured")
+        source_store.remove(source_id)
+        return RedirectResponse(url="/", status_code=status.HTTP_303_SEE_OTHER)
+
+    @app.post("/sources/{source_id}/toggle", dependencies=auth_dep)
+    def toggle_source(source_id: int) -> RedirectResponse:
+        if source_store is None:
+            raise HTTPException(status_code=503, detail="source store not configured")
+        current = next(
+            (s for s in source_store.list_all() if s.id == source_id), None
+        )
+        if current is None:
+            raise HTTPException(status_code=404, detail="source not found")
+        source_store.set_active(source_id, not current.active)
         return RedirectResponse(url="/", status_code=status.HTTP_303_SEE_OTHER)
 
     return app
