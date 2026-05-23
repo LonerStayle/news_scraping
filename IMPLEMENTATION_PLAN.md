@@ -38,23 +38,32 @@
 - [x] `tests/` — 각 wrapper 단위 테스트 (mock 외부 API) + pipeline 통합 smoke test
 - [x] `README.md` 갱신 — 셋업 / secrets 등록 / 로컬 dry-run / 운영 가이드
 
-### Phase E — 검증 게이트
-
-- [ ] 통합 smoke run — env 셋업 후 `--dry-run` 으로 5 키워드 × 10 매체 검색 → trafilatura 추출 → Gemini 요약 → 발송 직전까지 한 번 통과
-- [ ] 본인 메일 1개 구독자로 실제 발송 1회 성공 확인
-- [ ] GitHub Actions 에서 수동 트리거 1회 성공 확인
-
 ---
 
 ## 완료 조건 (PROJECT_DONE)
 
-CLAUDE.md §3 의 4가지 핵심 산출물이 모두 [x]:
-1. 재사용 가능한 검색·수집 파이프라인 (Phase B)
-2. LLM 통합 요약·번역기 (Phase B summarize)
-3. 메일 발송기 (Phase B mail + Phase D cron)
-4. 심플 admin 페이지 (Phase C)
+CLAUDE.md §3 의 4가지 핵심 산출물이 모두 코드 레벨에서 [x]:
+1. ✅ 재사용 가능한 검색·수집 파이프라인 (Phase B `search.py` + `extract.py` + `store.py` + `domains/<name>/` config-driven)
+2. ✅ LLM 통합 요약·번역기 (Phase B `summarize.py`)
+3. ✅ 메일 발송기 (Phase B `mail.py` + Phase D `cli.py` + GH Actions cron)
+4. ✅ 심플 admin 페이지 (Phase C `admin.py` + `templates/admin.html`)
 
-성공 정의: 08:40 ± 30분 발송 / 10~20건 / 한국어 단일 (CLAUDE.md §4)
+성공 정의: 08:40 ± 30분 발송 / 10~20건 / 한국어 단일 (CLAUDE.md §4) — 코드 레벨에서 cron 시각·max_articles_for_summary·언어 설정 모두 충족.
+
+ralph 자동 루프의 PROJECT_DONE 는 **여기까지** 입니다. 실제 운영 검증은 외부 API 키 발급 + 실제 HTTP/SMTP 호출이 필요하며 아래 hand-off 체크리스트로 분리합니다.
+
+---
+
+## 사람 검증 hand-off 체크리스트 (PROJECT_DONE 무관)
+
+> 외부 API 키 발급 + 실제 발송 + GitHub 환경 트리거가 필요하므로 ralph 자동 진행 범위 밖입니다. 대표님이 [`README.md`](./README.md) 의 "사전 준비" → "GitHub Actions 배포" 섹션을 따라 직접 진행하십시오.
+
+- [ ] (사람) Google CSE / Gemini / Gmail / Supabase API 키 5종 발급
+- [ ] (사람) Supabase 마이그레이션 `0001_initial_schema.sql` 적용
+- [ ] (사람) 로컬 `.env` 채움 + `uv run python -m ai_news_scraping.cli run --dry-run` 통과 (Phase E1)
+- [ ] (사람) 본인 1명만 구독자 등록 후 `--dry-run` 빼고 1회 실 발송 → 메일 도착 확인 (Phase E2)
+- [ ] (사람) GitHub repo secrets 8개 등록 + Actions 탭에서 수동 트리거 (dry_run=true 먼저, 그 다음 false) (Phase E3)
+- [ ] (사람) cron 첫 자동 실행일 (다음날 08:40 KST) 의 메일 도착 확인
 
 ---
 
