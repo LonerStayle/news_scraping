@@ -98,5 +98,39 @@
   {% else %}
     <div class="empty">등록된 구독자가 없습니다.</div>
   {% endif %}
+
+  <h2>검색 키워드 ({{ keywords|length }}개, active {{ keywords|selectattr("active")|list|length }}개)</h2>
+
+  <form class="add-form" method="post" action="/keywords">
+    <input type="text" name="keyword" required placeholder='예) "AI safety"'>
+    <button type="submit" class="primary">추가</button>
+  </form>
+
+  {% if keywords %}
+    <table>
+      <thead>
+        <tr><th>ID</th><th>Keyword</th><th>Active</th><th></th></tr>
+      </thead>
+      <tbody>
+        {% for k in keywords %}
+          <tr>
+            <td>{{ k.id }}</td>
+            <td>{{ k.keyword }}</td>
+            <td>{{ "✔︎" if k.active else "—" }}</td>
+            <td>
+              <form class="inline" method="post" action="/keywords/{{ k.id }}/toggle">
+                <button type="submit">토글</button>
+              </form>
+              <form class="inline" method="post" action="/keywords/{{ k.id }}/delete">
+                <button type="submit" class="danger">삭제</button>
+              </form>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <div class="empty">등록된 키워드가 없습니다. (DB 가 비어 있으면 cron 실행 시 yaml seed 가 자동 import 됩니다.)</div>
+  {% endif %}
 </body>
 </html>
