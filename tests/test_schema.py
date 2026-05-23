@@ -16,6 +16,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 MIGRATION_FILE = REPO_ROOT / "supabase" / "migrations" / "0001_initial_schema.sql"
 
 REQUIRED_TABLES = ("articles", "subscribers", "runs", "scrape_enabled")
+SCHEMA = "ai_news"
 
 
 @pytest.fixture(scope="module")
@@ -24,19 +25,28 @@ def sql_text() -> str:
     return MIGRATION_FILE.read_text(encoding="utf-8").lower()
 
 
+def test_schema_is_created(sql_text: str) -> None:
+    assert f"create schema if not exists {SCHEMA}" in sql_text
+
+
+def test_service_role_has_schema_grants(sql_text: str) -> None:
+    assert f"grant usage on schema {SCHEMA}" in sql_text
+    assert "service_role" in sql_text
+
+
 @pytest.mark.parametrize("table", REQUIRED_TABLES)
 def test_each_required_table_is_created(sql_text: str, table: str) -> None:
-    assert f"create table if not exists public.{table}" in sql_text
+    assert f"create table if not exists {SCHEMA}.{table}" in sql_text
 
 
 def test_rls_is_enabled_on_all_tables(sql_text: str) -> None:
     for table in REQUIRED_TABLES:
-        pattern = rf"alter table public\.{table}\s+enable row level security"
+        pattern = rf"alter table {SCHEMA}\.{table}\s+enable row level security"
         assert re.search(pattern, sql_text), f"RLS not enabled on {table}"
 
 
 def test_scrape_enabled_seeds_singleton_row(sql_text: str) -> None:
-    assert "insert into public.scrape_enabled" in sql_text
+    assert f"insert into {SCHEMA}.scrape_enabled" in sql_text
     assert "on conflict (id) do nothing" in sql_text
 
 

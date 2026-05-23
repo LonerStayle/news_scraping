@@ -69,15 +69,19 @@ class InMemoryArticleStore:
 class SupabaseArticleStore:
     """Production store backed by supabase-py ``Client``."""
 
-    def __init__(self, client: Any) -> None:
+    def __init__(self, client: Any, *, schema: str = "ai_news") -> None:
         self._client = client
+        self._schema = schema
+
+    def _table(self, name: str) -> Any:
+        return self._client.schema(self._schema).table(name)
 
     def existing_urls(self, urls: Iterable[str]) -> set[str]:
         url_list = list(urls)
         if not url_list:
             return set()
         resp = (
-            self._client.table("articles")
+            self._table("articles")
             .select("url")
             .in_("url", url_list)
             .execute()
@@ -99,7 +103,7 @@ class SupabaseArticleStore:
             "run_id": run_id,
         }
         (
-            self._client.table("articles")
+            self._table("articles")
             .upsert(payload, on_conflict="url")
             .execute()
         )

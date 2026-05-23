@@ -60,12 +60,13 @@ def _entry_run(*, dry_run: bool, domain: str) -> int:
     settings = get_settings()
     domain_cfg = load_domain(domain)
     client = _make_supabase_client(settings)
+    schema = settings.supabase_schema
     return run_command(
         settings=settings,
         domain_cfg=domain_cfg,
-        article_store=SupabaseArticleStore(client),
-        sub_store=SupabaseSubscriberStore(client),
-        scrape_store=SupabaseScrapeStateStore(client),
+        article_store=SupabaseArticleStore(client, schema=schema),
+        sub_store=SupabaseSubscriberStore(client, schema=schema),
+        scrape_store=SupabaseScrapeStateStore(client, schema=schema),
         dry_run=dry_run,
     )
 

@@ -98,7 +98,12 @@ class FakeQuery:
 @dataclass
 class FakeSupabaseClient:
     table_name: str | None = None
+    schema_name: str | None = None
     query: FakeQuery = field(default_factory=FakeQuery)
+
+    def schema(self, name: str) -> FakeSupabaseClient:
+        self.schema_name = name
+        return self
 
     def table(self, name: str) -> FakeQuery:
         self.table_name = name

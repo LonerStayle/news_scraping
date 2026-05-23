@@ -34,12 +34,16 @@ class InMemoryScrapeStateStore:
 class SupabaseScrapeStateStore:
     SINGLETON_ID = 1
 
-    def __init__(self, client: Any) -> None:
+    def __init__(self, client: Any, *, schema: str = "ai_news") -> None:
         self._client = client
+        self._schema = schema
+
+    def _table(self, name: str) -> Any:
+        return self._client.schema(self._schema).table(name)
 
     def is_enabled(self) -> bool:
         resp = (
-            self._client.table("scrape_enabled")
+            self._table("scrape_enabled")
             .select("enabled")
             .eq("id", self.SINGLETON_ID)
             .single()
@@ -50,7 +54,7 @@ class SupabaseScrapeStateStore:
 
     def set_enabled(self, enabled: bool) -> None:
         (
-            self._client.table("scrape_enabled")
+            self._table("scrape_enabled")
             .update({
                 "enabled": enabled,
                 "updated_at": datetime.now(UTC).isoformat(),

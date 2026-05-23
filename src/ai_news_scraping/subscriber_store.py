@@ -64,12 +64,16 @@ class InMemorySubscriberStore:
 
 
 class SupabaseSubscriberStore:
-    def __init__(self, client: Any) -> None:
+    def __init__(self, client: Any, *, schema: str = "ai_news") -> None:
         self._client = client
+        self._schema = schema
+
+    def _table(self, name: str) -> Any:
+        return self._client.schema(self._schema).table(name)
 
     def list_active_emails(self) -> list[str]:
         resp = (
-            self._client.table("subscribers")
+            self._table("subscribers")
             .select("email")
             .eq("active", True)
             .execute()
@@ -79,7 +83,7 @@ class SupabaseSubscriberStore:
 
     def list_all(self) -> list[Subscriber]:
         resp = (
-            self._client.table("subscribers")
+            self._table("subscribers")
             .select("id, email, active")
             .order("id")
             .execute()
@@ -97,7 +101,7 @@ class SupabaseSubscriberStore:
     def add(self, email: str) -> Subscriber:
         cleaned = _validate_email(email)
         resp = (
-            self._client.table("subscribers")
+            self._table("subscribers")
             .upsert({"email": cleaned, "active": True}, on_conflict="email")
             .execute()
         )
@@ -113,7 +117,7 @@ class SupabaseSubscriberStore:
 
     def remove(self, subscriber_id: int) -> bool:
         resp = (
-            self._client.table("subscribers")
+            self._table("subscribers")
             .delete()
             .eq("id", subscriber_id)
             .execute()

@@ -59,9 +59,17 @@ AI 트렌드를 따라가야 하는 개발자/PM 소수 (~10명). 각자 자기 
 | LLM | **Gemini API** (gemini-2.x flash 기본) | 무료 tier 사용 |
 | 메일 | **Gmail SMTP** (앱 비밀번호 발급) | 무료 |
 | 스케줄러 | **GitHub Actions cron** (정시 ± 최대 15분 지연 가능 — 발송 윈도우 안) | 무료 |
-| DB | **Supabase (Postgres 무료 tier 500MB)** | 무료 |
+| DB | **Supabase (Postgres 무료 tier 500MB)** — 반드시 **별도 schema 격리** (이 프로젝트는 `ai_news`) | 무료 |
 
 호출량 설계: **키워드 5개 × 1 호출/일** (키워드별로 `site:(domain1 OR domain2 OR ... OR domain10)` 한 쿼리에 매체 10개 묶음) → 일 5 호출 → Google CSE 무료 cap 안에 안정적으로 들어옴.
+
+> 🔒 **DB schema 격리 원칙 (대표님 지시):**
+> 같은 Supabase 프로젝트에 다른 서비스가 들어와도 충돌하지 않도록 **모든 테이블은 `public` 이 아닌 별도 schema (이 프로젝트는 `ai_news`)** 에 둔다.
+> - 마이그레이션: `create schema if not exists ai_news;` 로 시작, 모든 테이블은 `ai_news.<table>`
+> - 환경변수: `SUPABASE_SCHEMA=ai_news`
+> - 코드: `client.schema(settings.supabase_schema).table(...)` 패턴
+> - Supabase Dashboard → Settings → API → "Exposed schemas" 에 `ai_news` 추가 필수
+> - **이 원칙은 ralph 가 새 테이블/마이그레이션을 추가할 때도 반드시 지켜야 한다.**
 
 ### 7. 규모·일정·비용 cap
 
@@ -78,7 +86,7 @@ AI 트렌드를 따라가야 하는 개발자/PM 소수 (~10명). 각자 자기 
 | Backend | **Python + uv** + FastAPI (admin 버튼·구독자 form 용. 거의 batch script 에 가까움) |
 | Web Frontend | **단일 HTML 페이지 + 버튼 1개 + 명단 form** (React/Vite 오버킬 — FastAPI 가 같이 서빙) |
 | Mobile App | **없음** |
-| Database | **Supabase (Postgres 무료 tier)** |
+| Database | **Supabase (Postgres 무료 tier)** — `ai_news` schema 격리 (§6 원칙) |
 | 스케줄러 | **GitHub Actions cron** (매일 08:40 KST = 23:40 UTC 트리거) |
 | LLM | **Gemini API** |
 | 검색 | **Google Custom Search API** |
