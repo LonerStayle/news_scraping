@@ -5,8 +5,8 @@ from typing import Any
 import pytest
 
 from ai_news_scraping.search import (
-    CSE_MAX_NUM,
-    GOOGLE_CSE_ENDPOINT,
+    BRAVE_MAX_COUNT,
+    BRAVE_SEARCH_ENDPOINT,
     SearchResult,
     build_query,
     search,
@@ -29,8 +29,20 @@ class FakeSession:
         self.payload = payload
         self.calls: list[dict[str, Any]] = []
 
-    def get(self, url: str, params: dict[str, Any], timeout: float) -> Any:
-        self.calls.append({"url": url, "params": params, "timeout": timeout})
+    def get(
+        self,
+        url: str,
+        *,
+        params: dict[str, Any],
+        headers: dict[str, str],
+        timeout: float,
+    ) -> Any:
+        self.calls.append({
+            "url": url,
+            "params": params,
+            "headers": headers,
+            "timeout": timeout,
+        })
         return FakeResponse(self.payload)
 
 
@@ -58,27 +70,28 @@ def test_build_query_rejects_empty_sources() -> None:
 def test_search_returns_whitelisted_results_only() -> None:
     session = FakeSession(
         {
-            "items": [
-                {
-                    "title": "AI breakthrough",
-                    "link": "https://techcrunch.com/a",
-                    "snippet": "snippet 1",
-                    "displayLink": "techcrunch.com",
-                },
-                {
-                    "title": "Off-whitelist leak",
-                    "link": "https://random.com/x",
-                    "snippet": "snippet 2",
-                    "displayLink": "random.com",
-                },
-            ]
+            "web": {
+                "results": [
+                    {
+                        "title": "AI breakthrough",
+                        "url": "https://techcrunch.com/a",
+                        "description": "snippet 1",
+                        "meta_url": {"hostname": "techcrunch.com"},
+                    },
+                    {
+                        "title": "Off-whitelist leak",
+                        "url": "https://random.com/x",
+                        "description": "snippet 2",
+                        "meta_url": {"hostname": "random.com"},
+                    },
+                ]
+            }
         }
     )
     results = search(
         "AI",
         ["techcrunch.com", "wired.com"],
         api_key="k",
-        cx="cx",
         session=session,
     )
     assert len(results) == 1
@@ -91,52 +104,107 @@ def test_search_returns_whitelisted_results_only() -> None:
     )
 
 
-def test_search_sends_expected_params() -> None:
-    session = FakeSession({"items": []})
-    search("AI", ["a.com"], api_key="k", cx="cx", session=session)
+def test_search_strips_www_prefix_from_hostname() -> None:
+    session = FakeSession(
+        {
+            "web": {
+                "results": [
+                    {
+                        "title": "T",
+                        "url": "https://www.theverge.com/x",
+                        "description": "s",
+                        "meta_url": {"hostname": "www.theverge.com"},
+                    }
+                ]
+            }
+        }
+    )
+    results = search("AI", ["theverge.com"], api_key="k", session=session)
+    assert len(results) == 1
+    assert results[0].source_domain == "theverge.com"
+
+
+def test_search_sends_expected_headers_and_params() -> None:
+    session = FakeSession({"web": {"results": []}})
+    search("AI", ["a.com"], api_key="K1", session=session)
     assert len(session.calls) == 1
     call = session.calls[0]
-    assert call["url"] == GOOGLE_CSE_ENDPOINT
-    p = call["params"]
-    assert p["key"] == "k"
-    assert p["cx"] == "cx"
-    assert p["dateRestrict"] == "d1"
-    assert p["sort"] == "date"
-    assert p["num"] == CSE_MAX_NUM
-    assert "site:a.com" in p["q"]
+    assert call["url"] == BRAVE_SEARCH_ENDPOINT
+    assert call["headers"]["X-Subscription-Token"] == "K1"
+    assert call["headers"]["Accept"] == "application/json"
+    assert call["params"]["freshness"] == "pd"
+    assert call["params"]["count"] == 10
+    assert "site:a.com" in call["params"]["q"]
 
 
-def test_search_empty_items() -> None:
-    results = search("AI", ["a.com"], api_key="k", cx="cx", session=FakeSession({}))
+def test_search_empty_response() -> None:
+    results = search(
+        "AI", ["a.com"], api_key="k", session=FakeSession({})
+    )
     assert results == []
 
 
-def test_search_num_clamped_to_max() -> None:
-    session = FakeSession({"items": []})
-    search("AI", ["a.com"], api_key="k", cx="cx", num=50, session=session)
-    assert session.calls[0]["params"]["num"] == CSE_MAX_NUM
+def test_search_missing_web_key() -> None:
+    results = search(
+        "AI", ["a.com"], api_key="k", session=FakeSession({"other": "x"})
+    )
+    assert results == []
 
 
-def test_search_num_clamped_to_min() -> None:
-    session = FakeSession({"items": []})
-    search("AI", ["a.com"], api_key="k", cx="cx", num=0, session=session)
-    assert session.calls[0]["params"]["num"] == 1
+def test_search_count_clamped_to_max() -> None:
+    session = FakeSession({"web": {"results": []}})
+    search("AI", ["a.com"], api_key="k", num=999, session=session)
+    assert session.calls[0]["params"]["count"] == BRAVE_MAX_COUNT
 
 
-def test_search_skips_items_without_link() -> None:
+def test_search_count_clamped_to_min() -> None:
+    session = FakeSession({"web": {"results": []}})
+    search("AI", ["a.com"], api_key="k", num=0, session=session)
+    assert session.calls[0]["params"]["count"] == 1
+
+
+def test_search_falls_back_to_url_when_meta_missing() -> None:
     session = FakeSession(
         {
-            "items": [
-                {"title": "no link", "displayLink": "a.com"},
-                {
-                    "title": "ok",
-                    "link": "https://a.com/x",
-                    "displayLink": "a.com",
-                    "snippet": "s",
-                },
-            ]
+            "web": {
+                "results": [
+                    {
+                        "title": "T",
+                        "url": "https://a.com/x",
+                        "description": "s",
+                        # meta_url 누락 — url 에서 도메인 추출
+                    }
+                ]
+            }
         }
     )
-    results = search("AI", ["a.com"], api_key="k", cx="cx", session=session)
+    results = search("AI", ["a.com"], api_key="k", session=session)
+    assert len(results) == 1
+    assert results[0].source_domain == "a.com"
+
+
+def test_search_skips_items_without_url() -> None:
+    session = FakeSession(
+        {
+            "web": {
+                "results": [
+                    {"title": "no url", "meta_url": {"hostname": "a.com"}},
+                    {
+                        "title": "ok",
+                        "url": "https://a.com/x",
+                        "description": "s",
+                        "meta_url": {"hostname": "a.com"},
+                    },
+                ]
+            }
+        }
+    )
+    results = search("AI", ["a.com"], api_key="k", session=session)
     assert len(results) == 1
     assert results[0].url == "https://a.com/x"
+
+
+def test_search_custom_freshness() -> None:
+    session = FakeSession({"web": {"results": []}})
+    search("AI", ["a.com"], api_key="k", freshness="pw", session=session)
+    assert session.calls[0]["params"]["freshness"] == "pw"

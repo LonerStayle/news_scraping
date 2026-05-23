@@ -37,8 +37,7 @@ class PipelineParams:
     keywords: list[str]
     source_domains: list[str]
     subscribers: list[str]
-    google_cse_api_key: str
-    google_cse_cx: str
+    brave_search_api_key: str
     gemini_api_key: str
     gemini_model: str
     gmail_user: str
@@ -46,7 +45,7 @@ class PipelineParams:
     dry_run: bool = False
     num_results_per_keyword: int = 10
     max_articles_for_summary: int = 20
-    date_restrict: str = "d1"
+    freshness: str = "pd"  # Brave Search: past day
     subject_template: str = "오늘의 AI 트렌드 ({date})"
 
 
@@ -97,10 +96,9 @@ def run(params: PipelineParams, deps: PipelineDeps) -> PipelineResult:
             results = deps.search_fn(
                 keyword,
                 params.source_domains,
-                api_key=params.google_cse_api_key,
-                cx=params.google_cse_cx,
+                api_key=params.brave_search_api_key,
                 num=params.num_results_per_keyword,
-                date_restrict=params.date_restrict,
+                freshness=params.freshness,
             )
         except Exception as e:
             logger.warning("search failed for keyword=%r: %s", keyword, e)

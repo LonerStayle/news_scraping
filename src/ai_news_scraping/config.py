@@ -20,8 +20,7 @@ class Settings(BaseSettings):
         case_sensitive=False,
     )
 
-    google_cse_api_key: str
-    google_cse_cx: str
+    brave_search_api_key: str
 
     gemini_api_key: str
     gemini_model: str = "gemini-2.5-flash"

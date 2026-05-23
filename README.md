@@ -18,7 +18,7 @@
               └──────────────────┬───────────────────────┘
                                  ▼
    ┌─────────────────────────────────────────────────────────┐
-   │ 1) search.py      Google Custom Search (3위일체 검색)   │
+   │ 1) search.py      Brave Search (3위일체 검색)            │
    │    키워드 5 × 매체 10  →  site:(d1 OR d2 ...) 1 호출/kw │
    │ 2) extract.py     trafilatura 본문 추출 (실패 시 skip)  │
    │ 3) store.py       Supabase articles upsert + URL dedup  │
@@ -42,8 +42,7 @@
 
 | 항목 | 발급 위치 | 비고 |
 |------|----------|------|
-| Google Custom Search API key | https://console.cloud.google.com/ → APIs & Services → Credentials | 일 100회 무료 |
-| Google CSE 엔진 ID (cx) | https://programmablesearchengine.google.com/ | "Search the entire web" 켜기 |
+| Brave Search API key | https://api-dashboard.search.brave.com/ → Free plan → API Keys | 월 2,000회 무료 (카드 등록 필요, 청구 0) |
 | Gemini API key | https://aistudio.google.com/app/apikey | gemini-2.5-flash 무료 |
 | Gmail 앱 비밀번호 | https://myaccount.google.com/apppasswords | 2FA 활성화 필요. 16자리 |
 | Supabase 프로젝트 | https://supabase.com/ → 프로젝트 생성 | Free tier (Postgres 500MB) |
@@ -73,7 +72,7 @@ cp .env.example .env
 
 `.env` 의 키 (자세한 설명은 `.env.example` 주석):
 ```
-GOOGLE_CSE_API_KEY  GOOGLE_CSE_CX
+BRAVE_SEARCH_API_KEY
 GEMINI_API_KEY      GEMINI_MODEL=gemini-2.5-flash
 GMAIL_USER          GMAIL_APP_PASSWORD
 SUPABASE_URL        SUPABASE_SERVICE_ROLE_KEY
@@ -128,7 +127,7 @@ uv run python -m ai_news_scraping.cli run
 저장소 **Settings → Secrets and variables → Actions → New repository secret** 으로 다음 8개 등록:
 
 ```
-GOOGLE_CSE_API_KEY    GOOGLE_CSE_CX
+BRAVE_SEARCH_API_KEY
 GEMINI_API_KEY
 GMAIL_USER            GMAIL_APP_PASSWORD
 SUPABASE_URL          SUPABASE_SERVICE_ROLE_KEY

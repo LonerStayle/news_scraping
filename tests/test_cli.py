@@ -16,8 +16,7 @@ from ai_news_scraping.subscriber_store import InMemorySubscriberStore
 
 def _make_settings(**overrides: Any) -> Settings:
     defaults: dict[str, Any] = {
-        "google_cse_api_key": "K",
-        "google_cse_cx": "CX",
+        "brave_search_api_key": "BSK",
         "gemini_api_key": "G",
         "gemini_model": "gemini-2.5-flash",
         "gmail_user": "me@gmail.com",
@@ -90,7 +89,7 @@ def test_build_params_maps_fields() -> None:
     assert params.keywords == ["kw1", "kw2"]
     assert params.source_domains == ["a.com", "b.com"]
     assert params.subscribers == ["x@x.com", "y@x.com"]
-    assert params.google_cse_api_key == "K"
+    assert params.brave_search_api_key == "BSK"
     assert params.gemini_model == "gemini-2.5-flash"
     assert params.gmail_password == "P"
     assert params.dry_run is True

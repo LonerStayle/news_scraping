@@ -46,13 +46,25 @@ class FakeHttp:
     items_by_query_token: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
     calls: list[dict[str, Any]] = field(default_factory=list)
 
-    def get(self, url: str, params: dict[str, Any], timeout: float) -> _Resp:
-        self.calls.append({"url": url, "params": params, "timeout": timeout})
+    def get(
+        self,
+        url: str,
+        *,
+        params: dict[str, Any],
+        headers: dict[str, str],
+        timeout: float,
+    ) -> _Resp:
+        self.calls.append({
+            "url": url,
+            "params": params,
+            "headers": headers,
+            "timeout": timeout,
+        })
         q = params.get("q", "")
         for token, items in self.items_by_query_token.items():
             if token in q:
-                return _Resp({"items": items})
-        return _Resp({"items": []})
+                return _Resp({"web": {"results": items}})
+        return _Resp({"web": {"results": []}})
 
 
 # ───── trafilatura fake (extract.py 의 fetch/body/meta) ─────
@@ -122,17 +134,15 @@ def _adapt_search(http: FakeHttp):
         source_domains: list[str],
         *,
         api_key: str,
-        cx: str,
         num: int = 10,
-        date_restrict: str = "d1",
+        freshness: str = "pd",
     ):
         return real_search(
             keyword,
             source_domains,
             api_key=api_key,
-            cx=cx,
             num=num,
-            date_restrict=date_restrict,
+            freshness=freshness,
             session=cast(HttpSession, http),
         )
 
@@ -193,15 +203,15 @@ def test_smoke_end_to_end_through_real_modules() -> None:
             "artificial intelligence": [
                 {
                     "title": "Big AI launch",
-                    "link": "https://a.com/post1",
-                    "snippet": "snippet",
-                    "displayLink": "a.com",
+                    "url": "https://a.com/post1",
+                    "description": "snippet",
+                    "meta_url": {"hostname": "a.com"},
                 },
                 {
                     "title": "Another AI story",
-                    "link": "https://a.com/post2",
-                    "snippet": "snippet 2",
-                    "displayLink": "a.com",
+                    "url": "https://a.com/post2",
+                    "description": "snippet 2",
+                    "meta_url": {"hostname": "a.com"},
                 },
             ],
         }
@@ -215,8 +225,7 @@ def test_smoke_end_to_end_through_real_modules() -> None:
         keywords=["artificial intelligence"],
         source_domains=["a.com", "b.com"],
         subscribers=["alice@x.com", "bob@x.com"],
-        google_cse_api_key="K",
-        google_cse_cx="CX",
+        brave_search_api_key="BSK",
         gemini_api_key="G",
         gemini_model="gemini-2.5-flash",
         gmail_user="me@gmail.com",
@@ -244,9 +253,10 @@ def test_smoke_end_to_end_through_real_modules() -> None:
     assert result.refused == {}
 
     # 외부 경계 호출 검증
-    assert len(http.calls) == 1, "키워드 1개 → CSE 호출 1회 (CLAUDE.md §6)"
+    assert len(http.calls) == 1, "키워드 1개 → Brave 호출 1회 (CLAUDE.md §6)"
     assert "site:a.com OR site:b.com" in http.calls[0]["params"]["q"]
-    assert http.calls[0]["params"]["dateRestrict"] == "d1"
+    assert http.calls[0]["params"]["freshness"] == "pd"
+    assert http.calls[0]["headers"]["X-Subscription-Token"] == "BSK"
 
     assert len(fetchers.urls_fetched) == 2  # 두 URL 각각 fetch
 
@@ -275,9 +285,9 @@ def test_smoke_dry_run_skips_mail_but_runs_everything_else() -> None:
             "AI": [
                 {
                     "title": "X",
-                    "link": "https://a.com/y",
-                    "snippet": "s",
-                    "displayLink": "a.com",
+                    "url": "https://a.com/y",
+                    "description": "s",
+                    "meta_url": {"hostname": "a.com"},
                 }
             ]
         }
@@ -290,8 +300,7 @@ def test_smoke_dry_run_skips_mail_but_runs_everything_else() -> None:
         keywords=["AI"],
         source_domains=["a.com"],
         subscribers=["x@x.com"],
-        google_cse_api_key="K",
-        google_cse_cx="CX",
+        brave_search_api_key="BSK",
         gemini_api_key="G",
         gemini_model="m",
         gmail_user="me@gmail.com",

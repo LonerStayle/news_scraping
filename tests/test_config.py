@@ -6,8 +6,7 @@ from pydantic import ValidationError
 from ai_news_scraping.config import Settings, get_settings
 
 REQUIRED_ENV = {
-    "GOOGLE_CSE_API_KEY": "k1",
-    "GOOGLE_CSE_CX": "cx1",
+    "BRAVE_SEARCH_API_KEY": "bsk1",
     "GEMINI_API_KEY": "g1",
     "GMAIL_USER": "sender@example.com",
     "GMAIL_APP_PASSWORD": "p1",
@@ -27,7 +26,7 @@ def _set_env(monkeypatch: pytest.MonkeyPatch, overrides: dict[str, str] | None =
 def test_settings_loads_required_keys(monkeypatch: pytest.MonkeyPatch) -> None:
     _set_env(monkeypatch)
     s = Settings(_env_file=None)  # type: ignore[call-arg]
-    assert s.google_cse_api_key == "k1"
+    assert s.brave_search_api_key == "bsk1"
     assert s.gmail_user == "sender@example.com"
     assert s.supabase_url == "https://x.supabase.co"
 

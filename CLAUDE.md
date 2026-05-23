@@ -54,14 +54,14 @@ AI 트렌드를 따라가야 하는 개발자/PM 소수 (~10명). 각자 자기 
 
 | 영역 | 선택 | 비용 |
 |------|------|------|
-| 검색엔진 API | **Google Custom Search API** (일 100회 무료, 월 ~3,000 cap) | 무료 cap 안에서 운영 |
+| 검색엔진 API | **Brave Search API** (월 2,000회 무료. Google CSE 는 신규 프로젝트 PERMISSION_DENIED 빈번해 교체) | 무료 cap 안에서 운영 |
 | 본문 fetch | **requests + trafilatura** (본문 영역 자동 추출. 매체별 selector 노가다 X). 추출 실패 매체는 화이트리스트에서 제외. JS 동적 렌더 매체만 Playwright fallback | 무료 |
 | LLM | **Gemini API** (gemini-2.x flash 기본) | 무료 tier 사용 |
 | 메일 | **Gmail SMTP** (앱 비밀번호 발급) | 무료 |
 | 스케줄러 | **GitHub Actions cron** (정시 ± 최대 15분 지연 가능 — 발송 윈도우 안) | 무료 |
 | DB | **Supabase (Postgres 무료 tier 500MB)** — 반드시 **별도 schema 격리** (이 프로젝트는 `ai_news`) | 무료 |
 
-호출량 설계: **키워드 5개 × 1 호출/일** (키워드별로 `site:(domain1 OR domain2 OR ... OR domain10)` 한 쿼리에 매체 10개 묶음) → 일 5 호출 → Google CSE 무료 cap 안에 안정적으로 들어옴.
+호출량 설계: **키워드 5개 × 1 호출/일** (키워드별로 `site:(domain1 OR domain2 OR ... OR domain10)` 한 쿼리에 매체 10개 묶음) → 일 5 호출 × 30일 = 월 150 호출 → Brave Search 무료 2,000회 cap 의 13배 여유.
 
 > 🔒 **DB schema 격리 원칙 (대표님 지시):**
 > 같은 Supabase 프로젝트에 다른 서비스가 들어와도 충돌하지 않도록 **모든 테이블은 `public` 이 아닌 별도 schema (이 프로젝트는 `ai_news`)** 에 둔다.
@@ -89,7 +89,7 @@ AI 트렌드를 따라가야 하는 개발자/PM 소수 (~10명). 각자 자기 
 | Database | **Supabase (Postgres 무료 tier)** — `ai_news` schema 격리 (§6 원칙) |
 | 스케줄러 | **GitHub Actions cron** (매일 08:40 KST = 23:40 UTC 트리거) |
 | LLM | **Gemini API** |
-| 검색 | **Google Custom Search API** |
+| 검색 | **Brave Search API** (월 2,000회 무료) |
 | 메일 | **Gmail SMTP** |
 | 본문 fetch | **requests + trafilatura** (필요시 Playwright fallback) |
 

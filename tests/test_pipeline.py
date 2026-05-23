@@ -28,8 +28,7 @@ def _params(**overrides: Any) -> PipelineParams:
         "keywords": ["kw1"],
         "source_domains": ["a.com"],
         "subscribers": ["x@x.com"],
-        "google_cse_api_key": "K",
-        "google_cse_cx": "CX",
+        "brave_search_api_key": "BSK",
         "gemini_api_key": "G",
         "gemini_model": "gemini-2.5-flash",
         "gmail_user": "me@gmail.com",
@@ -80,15 +79,14 @@ class FakeSearchFn:
         source_domains: list[str],
         *,
         api_key: str,
-        cx: str,
         num: int = 10,
-        date_restrict: str = "d1",
+        freshness: str = "pd",
     ) -> list[SearchResult]:
         self.calls.append({
             "keyword": keyword,
             "source_domains": source_domains,
             "num": num,
-            "date_restrict": date_restrict,
+            "freshness": freshness,
         })
         if keyword in self.raise_on:
             raise RuntimeError(f"search failed for {keyword}")
