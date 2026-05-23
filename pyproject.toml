@@ -6,11 +6,13 @@ readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "google-genai>=2.6.0",
+    "markdown>=3.10.2",
     "pydantic-settings>=2.14.1",
     "pyyaml>=6.0.3",
     "requests>=2.34.2",
     "supabase>=2.30.0",
     "trafilatura>=2.0.0",
+    "types-markdown>=3.10.2.20260518",
     "types-pyyaml>=6.0.12.20260518",
     "types-requests>=2.33.0.20260518",
 ]
