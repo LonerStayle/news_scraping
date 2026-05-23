@@ -74,7 +74,7 @@ def test_search_returns_whitelisted_results_only() -> None:
                 "results": [
                     {
                         "title": "AI breakthrough",
-                        "url": "https://techcrunch.com/a",
+                        "url": "https://techcrunch.com/2026/05/ai-breakthrough-launch/",
                         "description": "snippet 1",
                         "meta_url": {"hostname": "techcrunch.com"},
                     },
@@ -96,12 +96,42 @@ def test_search_returns_whitelisted_results_only() -> None:
     )
     assert len(results) == 1
     assert results[0] == SearchResult(
-        url="https://techcrunch.com/a",
+        url="https://techcrunch.com/2026/05/ai-breakthrough-launch/",
         title="AI breakthrough",
         snippet="snippet 1",
         source_domain="techcrunch.com",
         keyword="AI",
     )
+
+
+def test_search_filters_out_category_and_homepage_urls() -> None:
+    """Brave 가 매체 카테고리/홈페이지를 freshness=pd 결과에 섞어줘도 제외."""
+    session = FakeSession(
+        {
+            "web": {
+                "results": [
+                    # 차단되어야 할 URL 들
+                    {"title": "Home", "url": "https://a.com/",
+                     "description": "s", "meta_url": {"hostname": "a.com"}},
+                    {"title": "Blog", "url": "https://a.com/blog/",
+                     "description": "s", "meta_url": {"hostname": "a.com"}},
+                    {"title": "Category", "url": "https://a.com/category/ai/",
+                     "description": "s", "meta_url": {"hostname": "a.com"}},
+                    {"title": "Models", "url": "https://a.com/models/",
+                     "description": "s", "meta_url": {"hostname": "a.com"}},
+                    {"title": "Short", "url": "https://a.com/products/x/",
+                     "description": "s", "meta_url": {"hostname": "a.com"}},
+                    # 통과해야 할 진짜 기사 URL
+                    {"title": "Real article",
+                     "url": "https://a.com/2026/05/openai-launches-new-model/",
+                     "description": "s", "meta_url": {"hostname": "a.com"}},
+                ]
+            }
+        }
+    )
+    results = search("AI", ["a.com"], api_key="k", session=session)
+    assert len(results) == 1
+    assert results[0].title == "Real article"
 
 
 def test_search_strips_www_prefix_from_hostname() -> None:
@@ -111,7 +141,7 @@ def test_search_strips_www_prefix_from_hostname() -> None:
                 "results": [
                     {
                         "title": "T",
-                        "url": "https://www.theverge.com/x",
+                        "url": "https://www.theverge.com/2026/05/ai-policy-breakdown-news/",
                         "description": "s",
                         "meta_url": {"hostname": "www.theverge.com"},
                     }
@@ -170,7 +200,7 @@ def test_search_falls_back_to_url_when_meta_missing() -> None:
                 "results": [
                     {
                         "title": "T",
-                        "url": "https://a.com/x",
+                        "url": "https://a.com/2026/05/article-slug-very-detailed/",
                         "description": "s",
                         # meta_url 누락 — url 에서 도메인 추출
                     }
@@ -191,7 +221,7 @@ def test_search_skips_items_without_url() -> None:
                     {"title": "no url", "meta_url": {"hostname": "a.com"}},
                     {
                         "title": "ok",
-                        "url": "https://a.com/x",
+                        "url": "https://a.com/2026/05/article-slug-very-detailed/",
                         "description": "s",
                         "meta_url": {"hostname": "a.com"},
                     },
@@ -201,7 +231,7 @@ def test_search_skips_items_without_url() -> None:
     )
     results = search("AI", ["a.com"], api_key="k", session=session)
     assert len(results) == 1
-    assert results[0].url == "https://a.com/x"
+    assert results[0].url == "https://a.com/2026/05/article-slug-very-detailed/"
 
 
 def test_search_custom_freshness() -> None:

@@ -85,7 +85,7 @@ class FakeFetchers:
         return "<html><body><article>" + "x" * 600 + "</article></body></html>"
 
     def body(self, html: str) -> str:
-        return "Long english body text. " * 40
+        return "Long english body text. " * 60
 
     def meta(self, html: str) -> _Meta:
         return _Meta(title="A breakthrough", date="2026-05-23")
@@ -203,13 +203,13 @@ def test_smoke_end_to_end_through_real_modules() -> None:
             "artificial intelligence": [
                 {
                     "title": "Big AI launch",
-                    "url": "https://a.com/post1",
+                    "url": "https://a.com/2026/05/big-ai-launch-article/",
                     "description": "snippet",
                     "meta_url": {"hostname": "a.com"},
                 },
                 {
                     "title": "Another AI story",
-                    "url": "https://a.com/post2",
+                    "url": "https://a.com/2026/05/another-ai-news-piece/",
                     "description": "snippet 2",
                     "meta_url": {"hostname": "a.com"},
                 },
@@ -285,7 +285,7 @@ def test_smoke_dry_run_skips_mail_but_runs_everything_else() -> None:
             "AI": [
                 {
                     "title": "X",
-                    "url": "https://a.com/y",
+                    "url": "https://a.com/2026/05/something-detailed/",
                     "description": "s",
                     "meta_url": {"hostname": "a.com"},
                 }

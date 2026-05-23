@@ -18,7 +18,7 @@ def test_happy_path() -> None:
     article = extract(
         "https://techcrunch.com/article/123",
         fetch_html=lambda u: html,
-        extract_body=lambda h: "long body text " * 30,
+        extract_body=lambda h: "long body text " * 50,
         extract_meta=lambda h: FakeMeta(title="Hello AI", date="2026-05-23"),
     )
     assert article.url == "https://techcrunch.com/article/123"
@@ -62,7 +62,7 @@ def test_no_metadata_fields() -> None:
     article = extract(
         "https://x.com/a",
         fetch_html=lambda u: "<html></html>",
-        extract_body=lambda u: "x" * 300,
+        extract_body=lambda u: "x" * 600,
         extract_meta=lambda u: None,
     )
     assert article.title == ""
@@ -73,7 +73,7 @@ def test_domain_strips_www() -> None:
     article = extract(
         "https://www.theverge.com/path/x",
         fetch_html=lambda u: "<html></html>",
-        extract_body=lambda u: "x" * 300,
+        extract_body=lambda u: "x" * 600,
         extract_meta=lambda u: None,
     )
     assert article.source_domain == "theverge.com"

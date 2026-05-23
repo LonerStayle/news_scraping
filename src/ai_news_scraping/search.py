@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any, Protocol, cast
+from urllib.parse import urlparse
 
 import requests
 
@@ -20,6 +21,30 @@ DEFAULT_TIMEOUT_SECONDS = 15.0
 BRAVE_MAX_COUNT = 20  # Brave Search 한 호출 최대 결과 수 (count param)
 DEFAULT_COUNT = 10
 DEFAULT_FRESHNESS = "pd"  # past day
+
+# 카테고리·홈페이지·인덱스 페이지를 차단하는 휴리스틱.
+# Brave 가 freshness=pd 로 매일 업데이트되는 카테고리 페이지도 fresh 로
+# 분류해 결과에 섞어 보내는 케이스가 빈번 (예: deepmind.google/blog/).
+_BLOCKED_FIRST_SEGMENTS = frozenset({
+    "category", "categories", "tag", "tags", "topics", "topic",
+    "author", "authors", "search", "page", "pages",
+})
+_MIN_LAST_SEGMENT_LEN = 15  # 개별 기사 slug 는 보통 10자 이상 (kebab-case)
+
+
+def _looks_like_article_url(url: str) -> bool:
+    """카테고리/홈페이지/인덱스 URL 인지 휴리스틱 판정."""
+    path = urlparse(url).path.strip("/")
+    if not path:
+        return False  # 도메인 루트 (예: https://deepmind.google/)
+    segments = path.split("/")
+    if len(segments) < 2:
+        return False  # /news, /blog, /category 같은 단일 segment
+    if segments[0].lower() in _BLOCKED_FIRST_SEGMENTS:
+        return False  # /category/ai, /tag/ml
+    last = segments[-1]
+    # /models/, /models/gemini/ 같은 짧은 제품·카테고리 페이지 차단.
+    return len(last) >= _MIN_LAST_SEGMENT_LEN
 
 
 @dataclass(frozen=True)
@@ -101,6 +126,8 @@ def search(
         hostname = hostname.removeprefix("www.")
         if not link or hostname not in whitelist:
             continue
+        if not _looks_like_article_url(link):
+            continue  # 카테고리/홈페이지/인덱스 페이지 차단
         results.append(
             SearchResult(
                 url=link,
