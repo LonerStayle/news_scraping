@@ -542,3 +542,89 @@ def test_history_tab_empty_when_no_run_store() -> None:
     client = TestClient(app)
     resp = client.get("/", auth=AUTH)
     assert "아직 발송 이력이 없습니다" in resp.text
+
+
+# ────────── Source edit (T1) ──────────
+
+
+def test_edit_source_updates_fields(ctx: AdminCtx) -> None:
+    rec = ctx.source_store.add("a.com", "A")
+    resp = ctx.client.post(
+        f"/sources/{rec.id}", auth=AUTH,
+        data={"domain": "b.com", "name": "B", "description": "AI"},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 303
+    updated = ctx.source_store.list_all()[0]
+    assert updated.domain == "b.com"
+    assert updated.name == "B"
+    assert updated.description == "AI"
+
+
+def test_edit_source_partial(ctx: AdminCtx) -> None:
+    rec = ctx.source_store.add("a.com", "A")
+    ctx.client.post(
+        f"/sources/{rec.id}", auth=AUTH,
+        data={"description": "메모만"},
+        follow_redirects=False,
+    )
+    updated = ctx.source_store.list_all()[0]
+    assert updated.domain == "a.com"  # 유지
+    assert updated.description == "메모만"
+
+
+def test_edit_source_unknown_returns_404(ctx: AdminCtx) -> None:
+    resp = ctx.client.post(
+        "/sources/999", auth=AUTH,
+        data={"name": "X"}, follow_redirects=False,
+    )
+    assert resp.status_code == 404
+
+
+# ────────── GET /api/runs/latest (T4) ──────────
+
+
+def test_api_runs_latest_empty_when_no_run_store() -> None:
+    app = create_app(
+        admin_token=ADMIN_TOKEN,
+        subscriber_store=InMemorySubscriberStore(),
+        scrape_state_store=InMemoryScrapeStateStore(),
+        run_store=None,
+    )
+    client = TestClient(app)
+    resp = client.get("/api/runs/latest", auth=AUTH)
+    assert resp.status_code == 200
+    assert resp.json() == {"available": False}
+
+
+def test_api_runs_latest_returns_recent_run() -> None:
+    rs = InMemoryRunStore()
+    r = rs.start_run()
+    rs.mark_finished(r.run_id, status="success", article_count=8)
+
+    app = create_app(
+        admin_token=ADMIN_TOKEN,
+        subscriber_store=InMemorySubscriberStore(),
+        scrape_state_store=InMemoryScrapeStateStore(),
+        run_store=rs,
+    )
+    client = TestClient(app)
+    resp = client.get("/api/runs/latest", auth=AUTH)
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["available"] is True
+    assert body["run"]["run_id"] == r.run_id
+    assert body["run"]["status"] == "success"
+    assert body["run"]["article_count"] == 8
+
+
+def test_api_runs_latest_returns_null_run_when_empty_store() -> None:
+    app = create_app(
+        admin_token=ADMIN_TOKEN,
+        subscriber_store=InMemorySubscriberStore(),
+        scrape_state_store=InMemoryScrapeStateStore(),
+        run_store=InMemoryRunStore(),
+    )
+    client = TestClient(app)
+    resp = client.get("/api/runs/latest", auth=AUTH)
+    assert resp.json() == {"available": True, "run": None}

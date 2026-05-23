@@ -15,6 +15,7 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parents[1]
 MIGRATION_FILE = REPO_ROOT / "supabase" / "migrations" / "0001_initial_schema.sql"
 MIGRATION_FILE_2 = REPO_ROOT / "supabase" / "migrations" / "0002_search_admin.sql"
+MIGRATION_FILE_3 = REPO_ROOT / "supabase" / "migrations" / "0003_source_description.sql"
 
 REQUIRED_TABLES = ("articles", "subscribers", "runs", "scrape_enabled")
 SEARCH_ADMIN_TABLES = ("search_keywords", "search_sources", "search_settings")
@@ -109,3 +110,13 @@ def test_search_settings_range_constraints(sql_text_2: str) -> None:
     assert "num_results_per_keyword between 1 and 20" in sql_text_2
     assert "max_articles_for_summary between 1 and 100" in sql_text_2
     assert "min_body_len between 50 and 5000" in sql_text_2
+
+
+# ─────────── 0003 search_sources description ───────────
+
+
+def test_0003_adds_description_column() -> None:
+    assert MIGRATION_FILE_3.is_file()
+    text = MIGRATION_FILE_3.read_text(encoding="utf-8").lower()
+    assert "alter table ai_news.search_sources" in text
+    assert "add column if not exists description" in text

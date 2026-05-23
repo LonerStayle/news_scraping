@@ -164,7 +164,10 @@ def _run_inner(
         except Exception as e:
             logger.warning("extract crashed: %s (%s)", r.url, e)
             continue
-        deps.store.upsert_article(article, keyword=r.keyword, run_id=run_id)
+        # dry_run 일 때는 articles 테이블에 저장하지 않음 — 검증 환경 dirty
+        # 방지 + 다음 실제 발송 시 dedup 으로 가려지지 않게.
+        if not params.dry_run:
+            deps.store.upsert_article(article, keyword=r.keyword, run_id=run_id)
         extracted.append((r, article))
 
     # ───── 5) Gemini 요약 ─────

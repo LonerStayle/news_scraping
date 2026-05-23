@@ -163,6 +163,28 @@ def create_app(
         source_store.remove(source_id)
         return RedirectResponse(url="/", status_code=status.HTTP_303_SEE_OTHER)
 
+    @app.post("/sources/{source_id}", dependencies=auth_dep)
+    def edit_source(
+        source_id: int,
+        domain: Annotated[str, Form()] = "",
+        name: Annotated[str, Form()] = "",
+        description: Annotated[str, Form()] = "",
+    ) -> RedirectResponse:
+        if source_store is None:
+            raise HTTPException(status_code=503, detail="source store not configured")
+        try:
+            updated = source_store.update(
+                source_id,
+                domain=domain or None,
+                name=name or None,
+                description=description if description != "" else None,
+            )
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
+        if updated is None:
+            raise HTTPException(status_code=404, detail="source not found")
+        return RedirectResponse(url="/", status_code=status.HTTP_303_SEE_OTHER)
+
     @app.post("/sources/{source_id}/toggle", dependencies=auth_dep)
     def toggle_source(source_id: int) -> RedirectResponse:
         if source_store is None:
@@ -174,6 +196,28 @@ def create_app(
             raise HTTPException(status_code=404, detail="source not found")
         source_store.set_active(source_id, not current.active)
         return RedirectResponse(url="/", status_code=status.HTTP_303_SEE_OTHER)
+
+    # ────────── 최근 run 상태 JSON (T4: 강제발송 폴링) ──────────
+
+    @app.get("/api/runs/latest", dependencies=auth_dep)
+    def get_latest_run() -> dict[str, Any]:
+        if run_store is None:
+            return {"available": False}
+        recent = run_store.list_recent(1)
+        if not recent:
+            return {"available": True, "run": None}
+        r = recent[0]
+        return {
+            "available": True,
+            "run": {
+                "run_id": r.run_id,
+                "started_at": r.started_at.isoformat(),
+                "finished_at": r.finished_at.isoformat() if r.finished_at else None,
+                "status": r.status,
+                "article_count": r.article_count,
+                "error": r.error,
+            },
+        }
 
     # ────────── 즉시 발송 (지금 보내기) ──────────
 

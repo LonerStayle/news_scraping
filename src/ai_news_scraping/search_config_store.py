@@ -25,6 +25,7 @@ class SourceRecord:
     domain: str
     name: str
     active: bool
+    description: str | None = None
 
 
 @dataclass(frozen=True)
@@ -176,6 +177,14 @@ class SourceStore(Protocol):
     def add(self, domain: str, name: str) -> SourceRecord: ...
     def remove(self, record_id: int) -> bool: ...
     def set_active(self, record_id: int, active: bool) -> bool: ...
+    def update(
+        self,
+        record_id: int,
+        *,
+        domain: str | None = None,
+        name: str | None = None,
+        description: str | None = None,
+    ) -> SourceRecord | None: ...
     def bulk_seed(self, sources: list[tuple[str, str]]) -> int: ...
 
 
@@ -215,6 +224,36 @@ class InMemorySourceStore:
         self._items[record_id] = replace(self._items[record_id], active=active)
         return True
 
+    def update(
+        self,
+        record_id: int,
+        *,
+        domain: str | None = None,
+        name: str | None = None,
+        description: str | None = None,
+    ) -> SourceRecord | None:
+        if record_id not in self._items:
+            return None
+        cur = self._items[record_id]
+        new_domain = cur.domain
+        new_name = cur.name
+        if domain is not None:
+            new_domain = domain.strip().lower().removeprefix("www.")
+            if not new_domain:
+                raise ValueError(f"domain must be non-empty: {domain!r}")
+        if name is not None:
+            new_name = name.strip()
+            if not new_name:
+                raise ValueError(f"name must be non-empty: {name!r}")
+        new_desc = description if description is not None else cur.description
+        if new_desc is not None:
+            new_desc = new_desc.strip() or None
+        updated = replace(
+            cur, domain=new_domain, name=new_name, description=new_desc
+        )
+        self._items[record_id] = updated
+        return updated
+
     def bulk_seed(self, sources: list[tuple[str, str]]) -> int:
         before = len(self._items)
         for domain, name in sources:
@@ -239,7 +278,10 @@ class SupabaseSourceStore:
 
     def list_all(self) -> list[SourceRecord]:
         resp = (
-            self._table().select("id, domain, name, active").order("id").execute()
+            self._table()
+            .select("id, domain, name, active, description")
+            .order("id")
+            .execute()
         )
         rows = getattr(resp, "data", None) or []
         return [
@@ -248,6 +290,7 @@ class SupabaseSourceStore:
                 domain=str(r["domain"]),
                 name=str(r["name"]),
                 active=bool(r.get("active", True)),
+                description=r.get("description"),
             )
             for r in rows
         ]
@@ -288,6 +331,42 @@ class SupabaseSourceStore:
         )
         rows = getattr(resp, "data", None) or []
         return len(rows) > 0
+
+    def update(
+        self,
+        record_id: int,
+        *,
+        domain: str | None = None,
+        name: str | None = None,
+        description: str | None = None,
+    ) -> SourceRecord | None:
+        payload: dict[str, Any] = {}
+        if domain is not None:
+            cleaned = domain.strip().lower().removeprefix("www.")
+            if not cleaned:
+                raise ValueError(f"domain must be non-empty: {domain!r}")
+            payload["domain"] = cleaned
+        if name is not None:
+            cleaned_name = name.strip()
+            if not cleaned_name:
+                raise ValueError(f"name must be non-empty: {name!r}")
+            payload["name"] = cleaned_name
+        if description is not None:
+            payload["description"] = description.strip() or None
+        if not payload:
+            return None
+        resp = self._table().update(payload).eq("id", record_id).execute()
+        rows = getattr(resp, "data", None) or []
+        if not rows:
+            return None
+        row = rows[0]
+        return SourceRecord(
+            id=int(row["id"]),
+            domain=str(row["domain"]),
+            name=str(row["name"]),
+            active=bool(row.get("active", True)),
+            description=row.get("description"),
+        )
 
     def bulk_seed(self, sources: list[tuple[str, str]]) -> int:
         payload = [

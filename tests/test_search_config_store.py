@@ -111,6 +111,38 @@ def test_in_memory_source_bulk_seed() -> None:
     assert n == 2
 
 
+def test_in_memory_source_update_all_fields() -> None:
+    s = InMemorySourceStore()
+    r = s.add("a.com", "A")
+    updated = s.update(r.id, domain="b.com", name="B", description="AI 매체")
+    assert updated is not None
+    assert updated.domain == "b.com"
+    assert updated.name == "B"
+    assert updated.description == "AI 매체"
+
+
+def test_in_memory_source_update_partial() -> None:
+    s = InMemorySourceStore()
+    r = s.add("a.com", "A")
+    updated = s.update(r.id, description="설명만")
+    assert updated is not None
+    assert updated.domain == "a.com"
+    assert updated.name == "A"
+    assert updated.description == "설명만"
+
+
+def test_in_memory_source_update_unknown_returns_none() -> None:
+    s = InMemorySourceStore()
+    assert s.update(999, name="X") is None
+
+
+def test_in_memory_source_update_empty_domain_raises() -> None:
+    s = InMemorySourceStore()
+    r = s.add("a.com", "A")
+    with pytest.raises(ValueError, match="domain"):
+        s.update(r.id, domain="   ")
+
+
 # ═══════════════════ InMemory: Settings ═══════════════════
 
 

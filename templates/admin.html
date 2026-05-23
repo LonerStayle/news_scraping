@@ -6,220 +6,343 @@
   <title>ai_news_scraping admin</title>
   <style>
     :root {
-      --bg: #fafbfc;
-      --card-bg: #ffffff;
-      --fg: #1f2328;
-      --muted: #57606a;
-      --accent: #0969da;
-      --accent-soft: #ddf4ff;
-      --border: #d0d7de;
-      --green: #1a7f37;
-      --red: #cf222e;
+      --bg-0: #08080c;
+      --bg-1: #0f0f17;
+      --bg-2: rgba(255, 255, 255, 0.04);
+      --bg-glass: rgba(20, 20, 30, 0.55);
+      --fg: #e8eaf0;
+      --muted: #7d8597;
+      --dim: #4f566b;
+      --accent: #6f8eff;
+      --accent-2: #b08bff;
+      --accent-3: #5ee0c0;
+      --warn: #ffbe55;
+      --danger: #ff6478;
+      --success: #5ee0c0;
+      --border: rgba(255, 255, 255, 0.08);
+      --border-strong: rgba(255, 255, 255, 0.15);
+      --glow-blue: 0 0 30px rgba(111, 142, 255, 0.18);
+      --glow-purple: 0 0 30px rgba(176, 139, 255, 0.18);
     }
-    * { box-sizing: border-box; }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo",
-                   "Segoe UI", "Noto Sans KR", Roboto, sans-serif;
+                   "Segoe UI", "Noto Sans KR", "Inter", system-ui, sans-serif;
+      background:
+        radial-gradient(ellipse 800px 600px at 0% 0%, rgba(111, 142, 255, 0.08), transparent),
+        radial-gradient(ellipse 600px 800px at 100% 100%, rgba(176, 139, 255, 0.08), transparent),
+        var(--bg-0);
       color: var(--fg);
-      background: var(--bg);
-      max-width: 920px;
-      margin: 0 auto;
-      padding: 2rem 1.5rem 6rem;
-      line-height: 1.55;
+      min-height: 100vh;
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
     }
-    h1 { font-size: 1.5rem; margin: 0 0 0.3rem; }
-    h2 { font-size: 1.15rem; margin: 0 0 1rem; }
-    .subtitle { color: var(--muted); margin: 0 0 1.5rem; font-size: 0.95rem; }
 
-    /* Tabs */
+    .layout { max-width: 960px; margin: 0 auto; padding: 2.5rem 1.5rem 6rem; }
+
+    /* ─── Header ─── */
+    header.hero {
+      margin-bottom: 2rem;
+    }
+    h1 {
+      font-size: 1.7rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      background: linear-gradient(135deg, var(--fg) 30%, var(--accent) 100%);
+      -webkit-background-clip: text;
+      background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 0.3rem;
+    }
+    .subtitle { color: var(--muted); font-size: 0.92rem; }
+
+    /* ─── Tabs ─── */
     nav.tabs {
       display: flex;
-      gap: 0.25rem;
-      border-bottom: 1px solid var(--border);
+      gap: 0.2rem;
+      padding: 0.3rem;
       margin-bottom: 1.5rem;
+      background: var(--bg-glass);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid var(--border);
+      border-radius: 12px;
       overflow-x: auto;
     }
     .tab {
-      background: none;
+      background: transparent;
       border: none;
       color: var(--muted);
-      padding: 0.7rem 1.1rem;
-      font-size: 0.95rem;
+      padding: 0.55rem 0.95rem;
+      font-size: 0.88rem;
       font-weight: 500;
       cursor: pointer;
-      border-bottom: 2px solid transparent;
+      border-radius: 8px;
       white-space: nowrap;
       font-family: inherit;
-      transition: color 0.15s, border-color 0.15s;
+      transition: all 0.2s;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
     }
-    .tab:hover { color: var(--fg); }
+    .tab:hover { color: var(--fg); background: rgba(255, 255, 255, 0.04); }
     .tab.active {
-      color: var(--accent);
-      border-bottom-color: var(--accent);
+      color: var(--fg);
+      background: linear-gradient(135deg, rgba(111, 142, 255, 0.18), rgba(176, 139, 255, 0.18));
+      border: 1px solid var(--border-strong);
     }
     .tab .count {
-      display: inline-block;
-      background: var(--border);
-      color: var(--fg);
-      padding: 0.05em 0.5em;
+      font-size: 0.72rem;
+      padding: 0.1em 0.45em;
       border-radius: 999px;
-      font-size: 0.78em;
-      margin-left: 0.4em;
+      background: rgba(255, 255, 255, 0.06);
+      color: var(--muted);
+      font-weight: 500;
     }
-    .tab.active .count { background: var(--accent-soft); color: var(--accent); }
+    .tab.active .count {
+      background: rgba(111, 142, 255, 0.3);
+      color: var(--accent);
+    }
 
-    .panel { display: none; animation: fadeIn 0.2s; }
+    /* ─── Panels ─── */
+    .panel { display: none; animation: fadeIn 0.3s ease; }
     .panel.active { display: block; }
-    @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
-
-    /* Cards */
-    .card {
-      background: var(--card-bg);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 1.1rem 1.3rem;
-      margin-bottom: 1rem;
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to   { opacity: 1; transform: none; }
     }
+
+    h2 { font-size: 1.05rem; font-weight: 600; margin-bottom: 1rem; letter-spacing: -0.01em; }
+
+    /* ─── Glass Cards ─── */
+    .card {
+      background: var(--bg-glass);
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 1.3rem 1.5rem;
+      margin-bottom: 1rem;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    .card:hover { border-color: var(--border-strong); }
     .card-row {
       display: flex;
       justify-content: space-between;
       align-items: center;
       gap: 1rem;
+      flex-wrap: wrap;
     }
-    .state-on  { color: var(--green); font-weight: 600; }
-    .state-off { color: var(--red);   font-weight: 600; }
+    .card-title { font-size: 1rem; font-weight: 600; margin-bottom: 0.2rem; }
+    .card-sub { color: var(--muted); font-size: 0.83rem; line-height: 1.55; }
 
-    /* Buttons */
+    .state-on, .state-off { font-weight: 600; font-size: 0.85rem; }
+    .state-on  { color: var(--success); }
+    .state-off { color: var(--danger); }
+
+    /* ─── Buttons ─── */
     button, .btn {
-      padding: 0.45rem 0.95rem;
-      border-radius: 6px;
-      border: 1px solid #888;
-      background: #fff;
+      padding: 0.5rem 1.05rem;
+      border-radius: 8px;
+      border: 1px solid var(--border-strong);
+      background: rgba(255, 255, 255, 0.04);
+      color: var(--fg);
       cursor: pointer;
-      font-size: 0.9rem;
+      font-size: 0.85rem;
       font-family: inherit;
+      font-weight: 500;
+      transition: all 0.15s;
     }
-    button:hover { background: #f6f8fa; }
-    button.primary {
-      background: var(--accent);
-      color: #fff;
+    button:hover {
+      background: rgba(255, 255, 255, 0.08);
       border-color: var(--accent);
     }
-    button.primary:hover { background: #0860c6; }
-    button.danger { color: var(--red); border-color: var(--red); }
-    button.danger:hover { background: #ffeded; }
+    button.primary {
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      border-color: transparent;
+      color: white;
+      box-shadow: var(--glow-blue);
+    }
+    button.primary:hover { transform: translateY(-1px); box-shadow: var(--glow-purple); }
+    button.danger { color: var(--danger); border-color: rgba(255, 100, 120, 0.3); }
+    button.danger:hover { background: rgba(255, 100, 120, 0.08); border-color: var(--danger); }
+    button:disabled { opacity: 0.5; cursor: not-allowed; transform: none !important; }
 
-    form.inline { display: inline; margin: 0; }
+    form.inline { display: inline-block; margin: 0; }
 
-    /* Forms */
+    /* ─── Forms ─── */
     .add-form {
       display: flex;
       gap: 0.5rem;
       margin: 1rem 0;
       flex-wrap: wrap;
     }
-    .add-form input {
+    .add-form input, .settings-form input, .settings-form select {
       flex: 1;
-      min-width: 200px;
-      padding: 0.45rem 0.7rem;
+      min-width: 180px;
+      padding: 0.55rem 0.85rem;
+      background: rgba(255, 255, 255, 0.04);
       border: 1px solid var(--border);
-      border-radius: 6px;
-      font-size: 0.95rem;
+      border-radius: 8px;
+      color: var(--fg);
+      font-size: 0.9rem;
       font-family: inherit;
+      transition: border-color 0.15s, background 0.15s;
+    }
+    .add-form input:focus, .settings-form input:focus, .settings-form select:focus {
+      outline: none;
+      border-color: var(--accent);
+      background: rgba(111, 142, 255, 0.06);
     }
     .settings-form {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 1rem 1.5rem;
-      margin: 1rem 0;
+      gap: 1.1rem 1.5rem;
+      margin: 0.5rem 0 1rem;
     }
-    .settings-form .field { display: flex; flex-direction: column; gap: 0.3rem; }
+    .settings-form .field { display: flex; flex-direction: column; gap: 0.35rem; }
     .settings-form label {
-      font-weight: 600;
-      font-size: 0.88rem;
+      font-weight: 500;
+      font-size: 0.84rem;
       color: var(--fg);
     }
     .settings-form .hint {
-      font-size: 0.78rem;
-      color: var(--muted);
+      font-size: 0.75rem;
+      color: var(--dim);
       margin-top: 0.1rem;
     }
-    .settings-form input,
-    .settings-form select {
-      padding: 0.45rem 0.7rem;
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      font-size: 0.95rem;
-      font-family: inherit;
-      background: #fff;
-    }
-    @media (max-width: 640px) {
-      .settings-form { grid-template-columns: 1fr; }
-    }
+    @media (max-width: 640px) { .settings-form { grid-template-columns: 1fr; } }
 
-    /* Tables */
+    /* ─── Tables ─── */
+    .table-wrap {
+      background: var(--bg-glass);
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+    }
     table {
       width: 100%;
       border-collapse: collapse;
-      margin-top: 0.75rem;
-      font-size: 0.92rem;
+      font-size: 0.88rem;
     }
     th, td {
-      padding: 0.55rem 0.55rem;
-      border-bottom: 1px solid #eaeef2;
+      padding: 0.7rem 0.9rem;
+      border-bottom: 1px solid var(--border);
       text-align: left;
     }
+    tr:last-child td { border-bottom: 0; }
     th {
-      background: #f6f8fa;
-      font-size: 0.82rem;
+      background: rgba(255, 255, 255, 0.02);
+      font-size: 0.72rem;
       color: var(--muted);
       font-weight: 500;
       text-transform: uppercase;
-      letter-spacing: 0.04em;
+      letter-spacing: 0.06em;
+    }
+    td code {
+      background: rgba(111, 142, 255, 0.1);
+      color: var(--accent);
+      padding: 0.1em 0.4em;
+      border-radius: 4px;
+      font-size: 0.82em;
+      font-family: "SF Mono", Menlo, Consolas, monospace;
     }
     .empty {
-      color: var(--muted);
+      color: var(--dim);
       font-style: italic;
-      padding: 1.2rem 0;
+      padding: 2rem 0;
       text-align: center;
     }
 
-    /* Toast for hash-restoration */
-    .hash-hint {
-      position: fixed;
-      bottom: 1rem;
-      left: 50%;
-      transform: translateX(-50%);
-      background: var(--fg);
-      color: #fff;
-      padding: 0.5rem 1rem;
+    /* ─── Inline edit (T1) ─── */
+    .source-row.editing td { background: rgba(111, 142, 255, 0.04); }
+    .source-row input.edit-input {
+      width: 100%;
+      padding: 0.3rem 0.5rem;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid var(--accent);
       border-radius: 6px;
+      color: var(--fg);
       font-size: 0.85rem;
-      opacity: 0;
-      transition: opacity 0.3s;
+      font-family: inherit;
     }
-    .hash-hint.show { opacity: 0.9; }
+    .edit-actions { display: none; }
+    .source-row.editing .edit-actions { display: inline-flex; gap: 0.3rem; }
+    .source-row.editing .view-actions { display: none; }
+
+    /* ─── Toast ─── */
+    .toast {
+      position: fixed;
+      bottom: 1.5rem;
+      left: 50%;
+      transform: translateX(-50%) translateY(20px);
+      background: var(--bg-glass);
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
+      border: 1px solid var(--border-strong);
+      color: var(--fg);
+      padding: 0.7rem 1.2rem;
+      border-radius: 12px;
+      font-size: 0.88rem;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s, transform 0.3s;
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+      max-width: 90vw;
+    }
+    .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+    /* ─── Spinner + progress (T4) ─── */
+    .run-status {
+      display: none;
+      align-items: center;
+      gap: 0.6rem;
+      padding: 0.9rem 1.1rem;
+      background: rgba(111, 142, 255, 0.06);
+      border: 1px solid rgba(111, 142, 255, 0.25);
+      border-radius: 10px;
+      margin-top: 0.8rem;
+      font-size: 0.85rem;
+    }
+    .run-status.show { display: flex; }
+    .run-status.done { background: rgba(94, 224, 192, 0.06); border-color: rgba(94, 224, 192, 0.25); }
+    .run-status.failed { background: rgba(255, 100, 120, 0.06); border-color: rgba(255, 100, 120, 0.25); }
+    .spinner {
+      width: 14px;
+      height: 14px;
+      border: 2px solid var(--accent);
+      border-right-color: transparent;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    .run-status.done .spinner,
+    .run-status.failed .spinner { display: none; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .status-icon { display: none; font-size: 1rem; }
+    .run-status.done .status-icon { display: inline; color: var(--success); }
+    .run-status.failed .status-icon { display: inline; color: var(--danger); }
+    .run-status .elapsed { color: var(--dim); margin-left: auto; font-variant-numeric: tabular-nums; }
   </style>
 </head>
 <body>
-  <h1>ai_news_scraping admin</h1>
-  <p class="subtitle">매일 아침 발송 / 검색 조건 / 구독자 명단 관리</p>
+<div class="layout">
+
+  <header class="hero">
+    <h1>ai_news_scraping</h1>
+    <div class="subtitle">매일 아침 발송 / 검색 조건 / 구독자 명단</div>
+  </header>
 
   <nav class="tabs" id="tabs">
     <button class="tab active" data-panel="overview">Overview</button>
-    <button class="tab" data-panel="keywords">
-      Keywords <span class="count">{{ keywords|length }}</span>
-    </button>
-    <button class="tab" data-panel="sources">
-      Sources <span class="count">{{ sources|length }}</span>
-    </button>
+    <button class="tab" data-panel="keywords">Keywords <span class="count">{{ keywords|length }}</span></button>
+    <button class="tab" data-panel="sources">Sources <span class="count">{{ sources|length }}</span></button>
     <button class="tab" data-panel="settings">Settings</button>
-    <button class="tab" data-panel="subscribers">
-      Subscribers <span class="count">{{ subscribers|length }}</span>
-    </button>
-    <button class="tab" data-panel="history">
-      History <span class="count">{{ runs|length }}</span>
-    </button>
+    <button class="tab" data-panel="subscribers">Subscribers <span class="count">{{ subscribers|length }}</span></button>
+    <button class="tab" data-panel="history">History <span class="count">{{ runs|length }}</span></button>
   </nav>
 
   <!-- ───── Overview ───── -->
@@ -227,53 +350,50 @@
     <div class="card">
       <div class="card-row">
         <div>
-          <h2 style="margin: 0;">자동 스크래핑</h2>
-          <div style="color: var(--muted); font-size: 0.85rem; margin-top: 0.2rem;">
-            매일 08:40 KST cron 실행 시 이 토글이 OFF 면 자동 skip.
-          </div>
+          <div class="card-title">자동 스크래핑</div>
+          <div class="card-sub">매일 08:40 KST cron 시 OFF 면 자동 skip.</div>
         </div>
         <div style="display: flex; gap: 1rem; align-items: center;">
-          {% if scrape_enabled %}
-            <span class="state-on">● ON</span>
-          {% else %}
-            <span class="state-off">● OFF</span>
-          {% endif %}
-          <form method="post" action="/scrape-enabled/toggle">
-            <button type="submit">토글</button>
-          </form>
+          {% if scrape_enabled %}<span class="state-on">● ON</span>{% else %}<span class="state-off">● OFF</span>{% endif %}
+          <form method="post" action="/scrape-enabled/toggle"><button type="submit">토글</button></form>
         </div>
       </div>
     </div>
 
     <div class="card">
       <div class="card-row">
-        <div>
-          <h2 style="margin: 0;">강제발송</h2>
-          <div style="color: var(--muted); font-size: 0.85rem; margin-top: 0.2rem;">
-            직전 발송의 기사들을 DB 에서 삭제하고 새로 검색·발송합니다 (cron 안 기다림).
-            <br>같은 기사가 dedup 으로 막혀 있어도 신선한 결과 보장. 백그라운드 실행 (1~3분).
+        <div style="flex: 1; min-width: 240px;">
+          <div class="card-title">강제발송</div>
+          <div class="card-sub">
+            직전 발송의 기사를 DB 에서 삭제 후 새로 검색·발송. dedup 우회. 백그라운드 1~3분.
           </div>
         </div>
-        <form method="post" action="/run-now" style="display: flex; gap: 0.6rem; align-items: center;">
-          <label style="font-size: 0.85rem; color: var(--muted); cursor: pointer;">
+        <form id="run-now-form" method="post" action="/run-now" style="display: flex; gap: 0.6rem; align-items: center;">
+          <label style="font-size: 0.82rem; color: var(--muted); cursor: pointer; display: inline-flex; gap: 0.3rem; align-items: center;">
             <input type="checkbox" name="dry_run" value="true">
-            dry-run (메일 발송 X)
+            dry-run
           </label>
           <input type="hidden" name="force" value="true">
           <button type="submit" class="primary">▶ 강제발송</button>
         </form>
       </div>
+      <div class="run-status" id="run-status">
+        <div class="spinner"></div>
+        <span class="status-icon">●</span>
+        <span class="run-status-text">발송 중…</span>
+        <span class="elapsed" id="run-elapsed">0초</span>
+      </div>
     </div>
 
     <div class="card">
-      <h2>요약</h2>
+      <div class="card-title" style="margin-bottom: 0.7rem;">요약</div>
       <table>
         <tr><td>구독자</td><td><strong>{{ subscribers|length }}명</strong> ({{ subscribers|selectattr("active")|list|length }} active)</td></tr>
         <tr><td>키워드</td><td><strong>{{ keywords|length }}개</strong> ({{ keywords|selectattr("active")|list|length }} active)</td></tr>
         <tr><td>매체</td><td><strong>{{ sources|length }}개</strong> ({{ sources|selectattr("active")|list|length }} active)</td></tr>
         {% if settings %}
         <tr><td>freshness</td><td><code>{{ settings.freshness }}</code></td></tr>
-        <tr><td>키워드당 검색 결과 수</td><td>{{ settings.num_results_per_keyword }}</td></tr>
+        <tr><td>키워드당 결과 수</td><td>{{ settings.num_results_per_keyword }}</td></tr>
         <tr><td>요약 입력 max</td><td>{{ settings.max_articles_for_summary }}건</td></tr>
         <tr><td>최소 본문 길이</td><td>{{ settings.min_body_len }}자</td></tr>
         {% endif %}
@@ -284,83 +404,79 @@
   <!-- ───── Keywords ───── -->
   <section class="panel" id="keywords">
     <h2>검색 키워드 ({{ keywords|length }}개, active {{ keywords|selectattr("active")|list|length }}개)</h2>
-
     <form class="add-form" method="post" action="/keywords">
       <input type="text" name="keyword" required placeholder='예) "AI safety"'>
       <button type="submit" class="primary">추가</button>
     </form>
-
     {% if keywords %}
-      <table>
-        <thead>
-          <tr><th>ID</th><th>Keyword</th><th>Active</th><th></th></tr>
-        </thead>
-        <tbody>
-          {% for k in keywords %}
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>ID</th><th>Keyword</th><th>Active</th><th></th></tr></thead>
+          <tbody>
+            {% for k in keywords %}
             <tr>
-              <td>{{ k.id }}</td>
+              <td><code>{{ k.id }}</code></td>
               <td>{{ k.keyword }}</td>
               <td>{{ "✔︎" if k.active else "—" }}</td>
               <td>
-                <form class="inline" method="post" action="/keywords/{{ k.id }}/toggle">
-                  <button type="submit">토글</button>
-                </form>
-                <form class="inline" method="post" action="/keywords/{{ k.id }}/delete">
-                  <button type="submit" class="danger">삭제</button>
-                </form>
+                <form class="inline" method="post" action="/keywords/{{ k.id }}/toggle"><button>토글</button></form>
+                <form class="inline" method="post" action="/keywords/{{ k.id }}/delete"><button class="danger">삭제</button></form>
               </td>
             </tr>
-          {% endfor %}
-        </tbody>
-      </table>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
     {% else %}
-      <div class="empty">등록된 키워드가 없습니다. (DB 가 비어 있으면 cron 실행 시 yaml seed 가 자동 import 됩니다.)</div>
+      <div class="empty">등록된 키워드가 없습니다. cron 첫 실행 시 yaml seed 가 자동 import 됩니다.</div>
     {% endif %}
   </section>
 
   <!-- ───── Sources ───── -->
   <section class="panel" id="sources">
     <h2>매체 화이트리스트 ({{ sources|length }}개, active {{ sources|selectattr("active")|list|length }}개)</h2>
-
     <form class="add-form" method="post" action="/sources">
-      <input type="text" name="domain" required placeholder="예) techcrunch.com">
-      <input type="text" name="name" required placeholder="예) TechCrunch">
+      <input type="text" name="domain" required placeholder="domain (예: techcrunch.com)">
+      <input type="text" name="name" required placeholder="이름 (예: TechCrunch)">
+      <input type="text" name="description" placeholder="설명 (선택)">
       <button type="submit" class="primary">추가</button>
     </form>
-
     {% if sources %}
-      <table>
-        <thead>
-          <tr><th>ID</th><th>Domain</th><th>Name</th><th>Active</th><th></th></tr>
-        </thead>
-        <tbody>
-          {% for s in sources %}
-            <tr>
-              <td>{{ s.id }}</td>
-              <td>{{ s.domain }}</td>
-              <td>{{ s.name }}</td>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>ID</th><th>Domain</th><th>Name</th><th>Description</th><th>Active</th><th></th></tr></thead>
+          <tbody>
+            {% for s in sources %}
+            <tr class="source-row" data-id="{{ s.id }}">
+              <td><code>{{ s.id }}</code></td>
+              <td class="cell-domain"><span class="view">{{ s.domain }}</span><input class="edit-input edit-only" name="domain" value="{{ s.domain }}" style="display:none;"></td>
+              <td class="cell-name"><span class="view">{{ s.name }}</span><input class="edit-input edit-only" name="name" value="{{ s.name }}" style="display:none;"></td>
+              <td class="cell-description"><span class="view" style="color: var(--muted);">{{ s.description or "—" }}</span><input class="edit-input edit-only" name="description" value="{{ s.description or '' }}" style="display:none;"></td>
               <td>{{ "✔︎" if s.active else "—" }}</td>
               <td>
-                <form class="inline" method="post" action="/sources/{{ s.id }}/toggle">
-                  <button type="submit">토글</button>
-                </form>
-                <form class="inline" method="post" action="/sources/{{ s.id }}/delete">
-                  <button type="submit" class="danger">삭제</button>
-                </form>
+                <span class="view-actions">
+                  <button class="edit-btn" data-id="{{ s.id }}">수정</button>
+                  <form class="inline" method="post" action="/sources/{{ s.id }}/toggle"><button>토글</button></form>
+                  <form class="inline" method="post" action="/sources/{{ s.id }}/delete"><button class="danger">삭제</button></form>
+                </span>
+                <span class="edit-actions">
+                  <button class="primary save-btn" data-id="{{ s.id }}">저장</button>
+                  <button class="cancel-btn" data-id="{{ s.id }}">취소</button>
+                </span>
               </td>
             </tr>
-          {% endfor %}
-        </tbody>
-      </table>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
     {% else %}
-      <div class="empty">등록된 매체가 없습니다. (DB 가 비어 있으면 cron 실행 시 yaml seed 가 자동 import 됩니다.)</div>
+      <div class="empty">등록된 매체가 없습니다. cron 첫 실행 시 yaml seed 가 자동 import 됩니다.</div>
     {% endif %}
   </section>
 
   <!-- ───── Settings ───── -->
   <section class="panel" id="settings">
     <h2>운영 설정</h2>
-
     {% if settings %}
     <form method="post" action="/settings" class="card">
       <div class="settings-form">
@@ -372,28 +488,25 @@
             <option value="pm" {% if settings.freshness == "pm" %}selected{% endif %}>past month (1개월)</option>
             <option value="py" {% if settings.freshness == "py" %}selected{% endif %}>past year (1년)</option>
           </select>
-          <div class="hint">검색 결과 기간 범위. 좁을수록 신선 / 넓을수록 풍부.</div>
+          <div class="hint">검색 결과 기간 범위.</div>
         </div>
         <div class="field">
-          <label for="num_results_per_keyword">키워드당 검색 결과 수 (1-20)</label>
-          <input type="number" name="num_results_per_keyword" id="num_results_per_keyword"
-                 min="1" max="20" value="{{ settings.num_results_per_keyword }}">
-          <div class="hint">Brave Search 호출 1회당 받는 결과 수. max 20.</div>
+          <label for="num_results_per_keyword">키워드당 결과 수 (1-20)</label>
+          <input type="number" name="num_results_per_keyword" id="num_results_per_keyword" min="1" max="20" value="{{ settings.num_results_per_keyword }}">
+          <div class="hint">Brave 한 호출당 결과 수.</div>
         </div>
         <div class="field">
-          <label for="max_articles_for_summary">요약 입력 최대 기사 수 (1-100)</label>
-          <input type="number" name="max_articles_for_summary" id="max_articles_for_summary"
-                 min="1" max="100" value="{{ settings.max_articles_for_summary }}">
-          <div class="hint">Gemini 에 한 번에 넘기는 기사 수 cap. CLAUDE.md §4 의 10-20 기준.</div>
+          <label for="max_articles_for_summary">요약 입력 최대 (1-100)</label>
+          <input type="number" name="max_articles_for_summary" id="max_articles_for_summary" min="1" max="100" value="{{ settings.max_articles_for_summary }}">
+          <div class="hint">Gemini 에 넘기는 기사 cap.</div>
         </div>
         <div class="field">
           <label for="min_body_len">최소 본문 길이 (50-5000자)</label>
-          <input type="number" name="min_body_len" id="min_body_len"
-                 min="50" max="5000" value="{{ settings.min_body_len }}">
-          <div class="hint">trafilatura 추출 본문이 이보다 짧으면 skip (paywall/카테고리 페이지 방어).</div>
+          <input type="number" name="min_body_len" id="min_body_len" min="50" max="5000" value="{{ settings.min_body_len }}">
+          <div class="hint">짧은 본문 skip (paywall 방어).</div>
         </div>
       </div>
-      <button type="submit" class="primary" style="margin-top: 0.5rem;">설정 저장</button>
+      <button type="submit" class="primary">저장</button>
     </form>
     {% else %}
       <div class="empty">설정 store 가 연결되지 않았습니다.</div>
@@ -403,32 +516,26 @@
   <!-- ───── Subscribers ───── -->
   <section class="panel" id="subscribers">
     <h2>구독자 명단 ({{ subscribers|length }}명)</h2>
-
     <form class="add-form" method="post" action="/subscribers">
       <input type="email" name="email" required placeholder="user@example.com">
       <button type="submit" class="primary">추가</button>
     </form>
-
     {% if subscribers %}
-      <table>
-        <thead>
-          <tr><th>ID</th><th>Email</th><th>Active</th><th></th></tr>
-        </thead>
-        <tbody>
-          {% for s in subscribers %}
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>ID</th><th>Email</th><th>Active</th><th></th></tr></thead>
+          <tbody>
+            {% for s in subscribers %}
             <tr>
-              <td>{{ s.id }}</td>
+              <td><code>{{ s.id }}</code></td>
               <td>{{ s.email }}</td>
               <td>{{ "✔︎" if s.active else "—" }}</td>
-              <td>
-                <form class="inline" method="post" action="/subscribers/{{ s.id }}/delete">
-                  <button type="submit" class="danger">삭제</button>
-                </form>
-              </td>
+              <td><form class="inline" method="post" action="/subscribers/{{ s.id }}/delete"><button class="danger">삭제</button></form></td>
             </tr>
-          {% endfor %}
-        </tbody>
-      </table>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
     {% else %}
       <div class="empty">등록된 구독자가 없습니다.</div>
     {% endif %}
@@ -437,112 +544,226 @@
   <!-- ───── History ───── -->
   <section class="panel" id="history">
     <h2>발송 이력 ({{ runs|length }}개 최근)</h2>
-
     {% if runs %}
-      <table>
-        <thead>
-          <tr>
-            <th>Run ID</th>
-            <th>시작</th>
-            <th>종료</th>
-            <th>Status</th>
-            <th>기사 수</th>
-            <th>요약 미리보기 / 에러</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for r in runs %}
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Run ID</th><th>시작</th><th>종료</th><th>Status</th><th>기사</th><th>요약 / 에러</th></tr></thead>
+          <tbody id="history-body">
+            {% for r in runs %}
             <tr>
-              <td><code style="font-size: 0.78rem;">{{ r.run_id[:8] }}</code></td>
-              <td style="font-size: 0.85rem;">{{ r.started_at.strftime("%Y-%m-%d %H:%M") }}</td>
-              <td style="font-size: 0.85rem;">
-                {% if r.finished_at %}{{ r.finished_at.strftime("%H:%M:%S") }}{% else %}—{% endif %}
-              </td>
+              <td><code>{{ r.run_id[:8] }}</code></td>
+              <td>{{ r.started_at.strftime("%Y-%m-%d %H:%M") }}</td>
+              <td>{% if r.finished_at %}{{ r.finished_at.strftime("%H:%M:%S") }}{% else %}—{% endif %}</td>
               <td>
-                {% if r.status == "success" %}
-                  <span class="state-on">✔ success</span>
-                {% elif r.status == "failed" %}
-                  <span class="state-off">✘ failed</span>
-                {% elif r.status == "skipped" %}
-                  <span style="color: var(--muted);">↪ skipped</span>
-                {% else %}
-                  <span style="color: var(--muted);">⋯ {{ r.status }}</span>
-                {% endif %}
+                {% if r.status == "success" %}<span class="state-on">✔ success</span>
+                {% elif r.status == "failed" %}<span class="state-off">✘ failed</span>
+                {% elif r.status == "skipped" %}<span style="color: var(--muted);">↪ skipped</span>
+                {% else %}<span style="color: var(--accent);">⋯ {{ r.status }}</span>{% endif %}
               </td>
               <td>{{ r.article_count }}</td>
-              <td style="font-size: 0.82rem; color: var(--muted); max-width: 360px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-                {% if r.error %}
-                  <span style="color: var(--red);">{{ r.error[:120] }}</span>
-                {% elif r.digest_text %}
-                  {{ r.digest_text[:120] }}…
-                {% else %}
-                  —
-                {% endif %}
+              <td style="color: var(--muted); max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                {% if r.error %}<span style="color: var(--danger);">{{ r.error[:120] }}</span>
+                {% elif r.digest_text %}{{ r.digest_text[:120] }}…
+                {% else %}—{% endif %}
               </td>
             </tr>
-          {% endfor %}
-        </tbody>
-      </table>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
     {% else %}
       <div class="empty">아직 발송 이력이 없습니다. 강제발송 1회 또는 cron 실행 후 표시됩니다.</div>
     {% endif %}
   </section>
 
-  <div class="hash-hint" id="hash-hint"></div>
+  <div class="toast" id="toast"></div>
+</div>
 
-  <script>
-    // ───── Triggered toast (after /run-now redirect) ─────
-    const qs = new URLSearchParams(location.search);
-    const triggered = qs.get('triggered');
-    if (triggered) {
-      const hint = document.getElementById('hash-hint');
-      const msg = {
-        'force':     '🚀 강제발송 시작! 직전 기사 삭제 후 새로 검색·발송 중 (1~3분)',
-        'live':      '🚀 발송 시작! 메일함 확인 (1~3분)',
-        'dry-force': '🧪 강제 dry-run (직전 기사 삭제 + 검색·요약, 메일 발송 X)',
-        'dry':       '🧪 dry-run 시작 (메일 발송 X, 1~3분)',
-      }[triggered] || '🚀 발송 트리거';
-      hint.textContent = msg;
-      hint.classList.add('show');
-      setTimeout(() => hint.classList.remove('show'), 5000);
-      // URL 정리 — 새로고침 시 또 안 뜨게
-      history.replaceState(null, '', location.pathname + location.hash);
-    }
-
-    // Tab switching + hash deep-link
-    const tabs = document.querySelectorAll('.tab');
-    const panels = document.querySelectorAll('.panel');
-
-    function activate(name) {
-      tabs.forEach(t => t.classList.toggle('active', t.dataset.panel === name));
-      panels.forEach(p => p.classList.toggle('active', p.id === name));
-    }
-
-    tabs.forEach(t => {
-      t.addEventListener('click', () => {
-        activate(t.dataset.panel);
-        history.replaceState(null, '', '#' + t.dataset.panel);
-      });
+<script>
+  // ─── Tabs ───
+  const tabs = document.querySelectorAll('.tab');
+  const panels = document.querySelectorAll('.panel');
+  function activate(name) {
+    tabs.forEach(t => t.classList.toggle('active', t.dataset.panel === name));
+    panels.forEach(p => p.classList.toggle('active', p.id === name));
+  }
+  tabs.forEach(t => t.addEventListener('click', () => {
+    activate(t.dataset.panel);
+    history.replaceState(null, '', '#' + t.dataset.panel);
+  }));
+  const h = location.hash.replace('#', '');
+  if (h && document.getElementById(h)) activate(h);
+  document.querySelectorAll('form').forEach(f => {
+    f.addEventListener('submit', () => {
+      const cur = location.hash;
+      if (cur && !(f.id === 'run-now-form')) {
+        const a = f.getAttribute('action') || '/';
+        if (!a.includes('#')) f.setAttribute('action', a + cur);
+      }
     });
+  });
 
-    // Restore from URL hash (deep-link)
-    const h = location.hash.replace('#', '');
-    if (h && document.getElementById(h)) {
-      activate(h);
+  // ─── Toast ───
+  const toast = document.getElementById('toast');
+  function showToast(msg, ms = 4500) {
+    toast.textContent = msg;
+    toast.classList.add('show');
+    setTimeout(() => toast.classList.remove('show'), ms);
+  }
+
+  // ─── Triggered toast (after /run-now redirect) ───
+  const qs = new URLSearchParams(location.search);
+  const triggered = qs.get('triggered');
+  if (triggered) {
+    const msg = {
+      'force':     '🚀 강제발송 시작! 직전 기사 삭제 후 새로 검색·발송 중',
+      'live':      '🚀 발송 시작! 메일함 확인',
+      'dry-force': '🧪 강제 dry-run (직전 기사 삭제 + 검색·요약, 메일 발송 X)',
+      'dry':       '🧪 dry-run 시작 (메일 발송 X)',
+    }[triggered] || '🚀 발송 트리거';
+    showToast(msg);
+    history.replaceState(null, '', location.pathname + location.hash);
+    startPolling();
+  }
+
+  // ─── Strange form interception: 강제발송 폼만 fetch 로 (T4) ───
+  const runForm = document.getElementById('run-now-form');
+  runForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const submitBtn = runForm.querySelector('button[type=submit]');
+    submitBtn.disabled = true;
+    const fd = new FormData(runForm);
+    try {
+      const resp = await fetch('/run-now', { method: 'POST', body: fd });
+      if (resp.ok || resp.redirected) {
+        const isDry = fd.get('dry_run') === 'true';
+        showToast(isDry ? '🧪 강제 dry-run 시작' : '🚀 강제발송 시작!');
+        startPolling();
+      } else {
+        showToast('❌ 발송 트리거 실패 (' + resp.status + ')');
+      }
+    } catch (err) {
+      showToast('❌ 네트워크 오류: ' + err.message);
+    } finally {
+      setTimeout(() => { submitBtn.disabled = false; }, 1500);
     }
+  });
 
-    // Sticky tab via form submission — set hidden hash for redirect target
-    // (서버는 /로 redirect 하지만 브라우저가 form action 의 hash 를 유지하므로
-    //  사용자가 마지막 본 탭으로 자연스럽게 복귀.)
-    document.querySelectorAll('form').forEach(f => {
-      f.addEventListener('submit', () => {
-        const cur = location.hash;
-        if (cur) {
-          const a = f.getAttribute('action') || '/';
-          if (!a.includes('#')) f.setAttribute('action', a + cur);
+  // ─── Polling status (T4) ───
+  const statusBox = document.getElementById('run-status');
+  const statusText = statusBox.querySelector('.run-status-text');
+  const elapsedEl = document.getElementById('run-elapsed');
+  let pollTimer = null;
+  let pollStartedAt = null;
+  let lastSeenRunId = null;
+
+  async function fetchLatest() {
+    try {
+      const resp = await fetch('/api/runs/latest');
+      if (!resp.ok) return null;
+      return await resp.json();
+    } catch { return null; }
+  }
+
+  function fmtElapsed(ms) {
+    const s = Math.floor(ms / 1000);
+    if (s < 60) return s + '초';
+    return Math.floor(s / 60) + '분 ' + (s % 60) + '초';
+  }
+
+  async function startPolling() {
+    statusBox.classList.remove('done', 'failed');
+    statusBox.classList.add('show');
+    statusText.textContent = '발송 중…';
+    pollStartedAt = Date.now();
+    if (pollTimer) clearInterval(pollTimer);
+
+    // 시작 직후 baseline run_id 기억
+    const baseline = await fetchLatest();
+    lastSeenRunId = baseline && baseline.run ? baseline.run.run_id : null;
+
+    pollTimer = setInterval(async () => {
+      elapsedEl.textContent = fmtElapsed(Date.now() - pollStartedAt);
+      const data = await fetchLatest();
+      if (!data || !data.run) return;
+      const r = data.run;
+      // 새 run 시작됐는지: baseline 과 다른 새 id 가 나타나거나
+      // baseline 이 null 이었던 경우
+      if (lastSeenRunId === null) lastSeenRunId = r.run_id;
+      const isNewRun = r.run_id !== baseline?.run?.run_id || baseline === null;
+      if (isNewRun && r.status !== 'running') {
+        // 완료 감지
+        statusBox.classList.remove('show');
+        if (r.status === 'success') {
+          statusBox.classList.add('done');
+          statusText.textContent = '✔ 완료 — 기사 ' + r.article_count + '건 발송';
+        } else if (r.status === 'failed') {
+          statusBox.classList.add('failed');
+          statusText.textContent = '✘ 실패 — ' + (r.error || 'unknown error');
+        } else {
+          statusBox.classList.add('done');
+          statusText.textContent = '↪ skipped (article_count=' + r.article_count + ')';
         }
-      });
+        statusBox.classList.add('show');
+        clearInterval(pollTimer);
+        pollTimer = null;
+        // 5초 후 History 탭 새로고침 (현재 페이지 reload)
+        setTimeout(() => { location.reload(); }, 5000);
+      } else if (isNewRun && r.status === 'running') {
+        statusText.textContent = '발송 중… (run ' + r.run_id.slice(0, 8) + ')';
+      }
+    }, 2000);
+
+    // 안전장치: 5분 후 자동 중단
+    setTimeout(() => {
+      if (pollTimer) {
+        clearInterval(pollTimer);
+        pollTimer = null;
+        statusBox.classList.remove('show');
+      }
+    }, 300_000);
+  }
+
+  // ─── Sources inline edit (T1) ───
+  document.querySelectorAll('.edit-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      btn.closest('.source-row').classList.add('editing');
+      btn.closest('.source-row').querySelectorAll('.view').forEach(v => v.style.display = 'none');
+      btn.closest('.source-row').querySelectorAll('.edit-only').forEach(i => i.style.display = '');
     });
-  </script>
+  });
+  document.querySelectorAll('.cancel-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const row = btn.closest('.source-row');
+      row.classList.remove('editing');
+      row.querySelectorAll('.view').forEach(v => v.style.display = '');
+      row.querySelectorAll('.edit-only').forEach(i => i.style.display = 'none');
+    });
+  });
+  document.querySelectorAll('.save-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const row = btn.closest('.source-row');
+      const id = btn.dataset.id;
+      const fd = new FormData();
+      fd.append('domain', row.querySelector('.cell-domain input').value);
+      fd.append('name', row.querySelector('.cell-name input').value);
+      fd.append('description', row.querySelector('.cell-description input').value);
+      btn.disabled = true;
+      try {
+        const resp = await fetch('/sources/' + id, { method: 'POST', body: fd });
+        if (resp.ok || resp.redirected) {
+          showToast('✓ 저장됨');
+          location.reload();
+        } else {
+          showToast('❌ 저장 실패 (' + resp.status + ')');
+          btn.disabled = false;
+        }
+      } catch (err) {
+        showToast('❌ 네트워크 오류');
+        btn.disabled = false;
+      }
+    });
+  });
+</script>
 </body>
 </html>

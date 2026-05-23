@@ -303,6 +303,8 @@ def test_run_dry_run_skips_mail_but_still_summarizes() -> None:
     assert "트렌드" in result.digest_markdown
     assert fakes["send_mail_fn"].calls == []  # mail must NOT be sent
     assert len(fakes["summarize_fn"].calls) == 1
+    # dry_run 시 article 도 store 에 저장하지 않음 (T2)
+    assert fakes["store"].articles == {}
 
 
 # ────────── cap ──────────
