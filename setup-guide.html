@@ -386,15 +386,39 @@
     </ol>
 
     <h4>B. Search Engine ID (cx) 발급</h4>
+
+    <div class="callout warn">
+      <span class="label">⚠️ UI 변경 안내:</span>
+      예전 Google Programmable Search Engine 에는 "Search the entire web" 토글이 있었지만, 최근 UI 개편으로 신규 생성 시 그 옵션이 보이지 않을 수 있습니다.
+      아래는 <strong>최신 UI 기준</strong>의 우회 방법 — 우리 매체 10개 도메인을 직접 "Sites to search" 에 넣는 방식입니다.
+      어차피 우리 코드가 <code>site:(d1 OR d2 ...)</code> 필터를 쿼리에 직접 넣으므로 콘솔/코드 양쪽이 일치하면 더 안전합니다.
+    </div>
+
     <ol class="steps">
       <li><a href="https://programmablesearchengine.google.com/" target="_blank">https://programmablesearchengine.google.com/</a> 접속.</li>
       <li><strong>"새 검색엔진"</strong> 또는 <strong>"Add"</strong> 클릭.</li>
       <li>이름: <code>ai-news-scraping</code> 같은 임의 값.</li>
-      <li><strong>"전체 웹 검색"</strong> 또는 <strong>"Search the entire web"</strong> 옵션을 <strong>반드시 ON</strong> 으로 설정.
-        <div class="callout warn"><span class="label">⚠️ 중요:</span> 특정 사이트 한정으로 설정하면 안 됩니다. 매체 화이트리스트는 코드의 <code>sources.yaml</code> 이 <code>site:</code> 필터로 처리합니다.</div>
+      <li><strong>"Sites to search"</strong> (검색할 사이트) 칸에 아래 10개 매체 도메인을 한 줄씩 (또는 콤마 구분으로) 추가:
+        <pre>techcrunch.com
+theverge.com
+arstechnica.com
+wired.com
+venturebeat.com
+technologyreview.com
+spectrum.ieee.org
+openai.com
+anthropic.com
+deepmind.google</pre>
+        <div class="callout tip"><span class="label">📌 참고:</span> <code>domains/ai_news/sources.yaml</code> 과 동일한 10개입니다. 나중에 매체를 추가·제거하실 때는 yaml 과 CSE 콘솔 양쪽을 함께 업데이트하시면 됩니다.</div>
       </li>
-      <li>생성 완료 후 엔진 상세 페이지 → "Search engine ID" 값 복사 → 이것이 <code>GOOGLE_CSE_CX</code>.</li>
+      <li>(만약 "Search the entire web" 옵션이 화면에 보인다면) ON 으로 켜셔도 무방. 우리 코드의 <code>site:</code> 필터가 어차피 화이트리스트로 한정하니까 결과 동일.</li>
+      <li>생성 완료 후 엔진 상세 페이지 → <strong>"Search engine ID"</strong> 값 복사 → 이것이 <code>GOOGLE_CSE_CX</code>.</li>
     </ol>
+
+    <div class="callout tip">
+      <span class="label">💡 "Search the entire web" 토글을 꼭 찾고 싶다면:</span>
+      엔진 생성 후 → 엔진 클릭 → <strong>Setup</strong> (또는 <strong>Settings</strong>) → "Search features" 또는 "Basic" 탭 안에 "Search the entire web" 토글이 숨어있는 경우가 있습니다. 토글이 있으면 켜도 우리 코드의 <code>site:</code> 필터가 결과를 같은 10개 매체로 좁힙니다.
+    </div>
 
     <div class="callout ok">
       <span class="label">✅ 결과:</span> <code>GOOGLE_CSE_API_KEY</code> 와 <code>GOOGLE_CSE_CX</code> 두 값을 메모장에 보관.
