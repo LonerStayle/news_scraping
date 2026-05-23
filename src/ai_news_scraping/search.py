@@ -29,7 +29,7 @@ _BLOCKED_FIRST_SEGMENTS = frozenset({
     "category", "categories", "tag", "tags", "topics", "topic",
     "author", "authors", "search", "page", "pages",
 })
-_MIN_LAST_SEGMENT_LEN = 15  # 개별 기사 slug 는 보통 10자 이상 (kebab-case)
+_MIN_LAST_SEGMENT_LEN = 10  # 개별 기사 slug 는 보통 10자 이상 (kebab-case)
 
 
 def _looks_like_article_url(url: str) -> bool:

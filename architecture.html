@@ -1,0 +1,1141 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ai_news_scraping — 전체 아키텍처</title>
+<style>
+  :root {
+    --bg-0: #0a0e1a;
+    --bg-1: #111726;
+    --bg-2: #1a2236;
+    --fg: #e6edf3;
+    --muted: #8b97a8;
+    --accent: #60a5fa;
+    --accent-2: #a78bfa;
+    --accent-3: #34d399;
+    --warn: #fbbf24;
+    --danger: #f87171;
+    --border: #2a3450;
+    --shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    --glow-blue: 0 0 24px rgba(96, 165, 250, 0.3);
+    --glow-purple: 0 0 24px rgba(167, 139, 250, 0.3);
+    --glow-green: 0 0 24px rgba(52, 211, 153, 0.3);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo",
+                 "Segoe UI", "Noto Sans KR", Roboto, sans-serif;
+    background: radial-gradient(ellipse at top, var(--bg-1), var(--bg-0));
+    color: var(--fg);
+    line-height: 1.6;
+    min-height: 100vh;
+  }
+
+  /* ───── Hero ───── */
+  header.hero {
+    text-align: center;
+    padding: 4rem 2rem 3rem;
+    border-bottom: 1px solid var(--border);
+    background: linear-gradient(180deg, transparent, rgba(96, 165, 250, 0.05));
+  }
+  .hero h1 {
+    font-size: 2.4rem;
+    font-weight: 700;
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 0.5rem;
+  }
+  .hero p.tag {
+    color: var(--muted);
+    font-size: 1.05rem;
+    max-width: 640px;
+    margin: 0 auto;
+  }
+  .hero .badges {
+    display: flex;
+    gap: 0.5rem;
+    justify-content: center;
+    margin-top: 1.5rem;
+    flex-wrap: wrap;
+  }
+  .badge {
+    padding: 0.3rem 0.8rem;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--bg-2);
+    font-size: 0.8rem;
+    color: var(--muted);
+  }
+  .badge strong { color: var(--fg); }
+  .badge.live { border-color: var(--accent-3); color: var(--accent-3); }
+  .badge.live::before {
+    content: "●";
+    margin-right: 0.3em;
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  /* ───── Tabs ───── */
+  nav.tabs {
+    position: sticky;
+    top: 0;
+    background: rgba(10, 14, 26, 0.92);
+    backdrop-filter: blur(20px);
+    border-bottom: 1px solid var(--border);
+    z-index: 10;
+  }
+  .tab-list {
+    max-width: 1200px;
+    margin: 0 auto;
+    display: flex;
+    gap: 0.25rem;
+    padding: 0 1rem;
+    overflow-x: auto;
+  }
+  .tab-btn {
+    background: none;
+    border: none;
+    color: var(--muted);
+    padding: 1rem 1.2rem;
+    font-size: 0.95rem;
+    font-weight: 500;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    white-space: nowrap;
+    transition: color 0.2s, border-color 0.2s;
+    font-family: inherit;
+  }
+  .tab-btn:hover { color: var(--fg); }
+  .tab-btn.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+  }
+
+  /* ───── Main ───── */
+  main {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 2.5rem 1.5rem 6rem;
+  }
+  .panel { display: none; animation: fadeIn 0.35s ease; }
+  .panel.active { display: block; }
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  h2 { font-size: 1.5rem; margin: 0 0 1.2rem; }
+  h3 { font-size: 1.1rem; margin: 2rem 0 0.7rem; color: var(--accent); }
+  p { color: var(--fg); margin: 0.5rem 0; }
+  p.muted { color: var(--muted); }
+
+  /* ───── Card grid ───── */
+  .cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1rem;
+    margin-top: 1rem;
+  }
+  .card {
+    background: var(--bg-1);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.2rem;
+    transition: border-color 0.2s, transform 0.2s, box-shadow 0.2s;
+  }
+  .card:hover {
+    border-color: var(--accent);
+    transform: translateY(-2px);
+    box-shadow: var(--glow-blue);
+  }
+  .card h4 {
+    font-size: 1rem;
+    margin: 0 0 0.5rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .card .icon {
+    width: 1.6rem;
+    height: 1.6rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg-2);
+    border-radius: 6px;
+    font-size: 0.9rem;
+  }
+  .card p { color: var(--muted); font-size: 0.9rem; }
+
+  /* ───── Pipeline stages ───── */
+  .pipeline {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    margin: 1.5rem 0;
+  }
+  .stage {
+    background: var(--bg-1);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.25s;
+    overflow: hidden;
+  }
+  .stage:hover { border-color: var(--accent); }
+  .stage.expanded { border-color: var(--accent); box-shadow: var(--glow-blue); }
+  .stage-head {
+    padding: 1rem 1.2rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+  }
+  .stage-num {
+    width: 2.2rem;
+    height: 2.2rem;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    color: var(--bg-0);
+    font-weight: 700;
+    font-size: 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .stage-title { flex: 1; }
+  .stage-title strong { display: block; font-size: 1rem; }
+  .stage-title span { color: var(--muted); font-size: 0.85rem; }
+  .stage-chevron {
+    color: var(--muted);
+    transition: transform 0.25s;
+    font-size: 1.2rem;
+  }
+  .stage.expanded .stage-chevron { transform: rotate(90deg); color: var(--accent); }
+  .stage-body {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.35s ease;
+  }
+  .stage.expanded .stage-body { max-height: 800px; }
+  .stage-body-inner {
+    padding: 0 1.2rem 1.2rem 4.4rem;
+    border-top: 1px solid var(--border);
+    margin-top: 0;
+    padding-top: 1rem;
+  }
+  .stage-body-inner > .label {
+    color: var(--accent-3);
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin: 0.8rem 0 0.3rem;
+  }
+  .stage-body-inner > .label:first-child { margin-top: 0; }
+  .stage-body-inner code {
+    background: var(--bg-2);
+    color: var(--accent);
+    padding: 0.1em 0.4em;
+    border-radius: 4px;
+    font-size: 0.85em;
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+  }
+  .stage-body-inner pre {
+    background: var(--bg-0);
+    color: var(--fg);
+    padding: 0.8rem 1rem;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    overflow-x: auto;
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: 0.82rem;
+    line-height: 1.55;
+    margin: 0.4rem 0;
+  }
+  .stage-arrow {
+    text-align: center;
+    color: var(--muted);
+    font-size: 1.3rem;
+    line-height: 0.3;
+  }
+
+  /* ───── Module list ───── */
+  .module {
+    background: var(--bg-1);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1rem 1.2rem;
+    margin: 0.6rem 0;
+    transition: border-color 0.2s;
+  }
+  .module:hover { border-color: var(--accent-2); }
+  .module-head {
+    display: flex;
+    align-items: baseline;
+    gap: 0.8rem;
+    flex-wrap: wrap;
+  }
+  .module-name {
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: 0.95rem;
+    color: var(--accent-2);
+    font-weight: 600;
+  }
+  .module-role { color: var(--fg); }
+  .module-deps {
+    margin-top: 0.4rem;
+    font-size: 0.8rem;
+    color: var(--muted);
+  }
+  .module-deps code {
+    background: var(--bg-2);
+    color: var(--accent-3);
+    padding: 0.05em 0.4em;
+    border-radius: 4px;
+    margin: 0 0.15em;
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: 0.85em;
+  }
+
+  /* ───── Table ───── */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1rem 0;
+    background: var(--bg-1);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  th, td {
+    padding: 0.7rem 0.9rem;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.9rem;
+  }
+  th {
+    background: var(--bg-2);
+    color: var(--accent);
+    font-weight: 600;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  td code {
+    background: var(--bg-2);
+    color: var(--accent-3);
+    padding: 0.1em 0.4em;
+    border-radius: 4px;
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: 0.85em;
+  }
+
+  /* ───── Schema ───── */
+  .schema-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 1rem;
+    margin: 1rem 0;
+  }
+  .schema-tbl {
+    background: var(--bg-1);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1rem;
+  }
+  .schema-tbl h4 {
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    color: var(--accent);
+    font-size: 0.95rem;
+    margin-bottom: 0.6rem;
+    padding-bottom: 0.4rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .schema-tbl ul {
+    list-style: none;
+    padding: 0;
+    font-size: 0.85rem;
+  }
+  .schema-tbl li {
+    padding: 0.2rem 0;
+    color: var(--muted);
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+  }
+  .schema-tbl li strong {
+    color: var(--fg);
+    font-weight: 400;
+  }
+  .schema-tbl li .type { color: var(--accent-3); }
+  .schema-tbl li .pk::after {
+    content: " PK";
+    color: var(--warn);
+    font-size: 0.7em;
+  }
+
+  /* ───── Callouts ───── */
+  .callout {
+    margin: 1rem 0;
+    padding: 1rem 1.2rem;
+    border-left: 3px solid var(--accent);
+    background: rgba(96, 165, 250, 0.07);
+    border-radius: 6px;
+  }
+  .callout.purple { border-color: var(--accent-2); background: rgba(167, 139, 250, 0.07); }
+  .callout.green  { border-color: var(--accent-3); background: rgba(52, 211, 153, 0.07); }
+  .callout.warn   { border-color: var(--warn);     background: rgba(251, 191, 36, 0.07); }
+  .callout .lbl   { font-weight: 600; margin-right: 0.4em; }
+
+  /* ───── KPI ───── */
+  .kpis {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 0.8rem;
+    margin: 1.5rem 0;
+  }
+  .kpi {
+    background: var(--bg-1);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1.1rem;
+    text-align: center;
+  }
+  .kpi-val {
+    font-size: 1.6rem;
+    font-weight: 700;
+    background: linear-gradient(135deg, var(--accent), var(--accent-3));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .kpi-lbl {
+    font-size: 0.78rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-top: 0.4rem;
+  }
+
+  /* ───── Visual arrow flow ───── */
+  .flow {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 0.6rem;
+    margin: 2rem 0 1rem;
+  }
+  .flow-step {
+    background: var(--bg-1);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1rem 0.6rem;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+  }
+  .flow-step:hover {
+    border-color: var(--accent);
+    transform: translateY(-3px);
+    box-shadow: var(--glow-blue);
+  }
+  .flow-step .icon {
+    font-size: 1.8rem;
+    margin-bottom: 0.4rem;
+  }
+  .flow-step .name {
+    font-weight: 600;
+    font-size: 0.85rem;
+  }
+  .flow-step .sub {
+    font-size: 0.7rem;
+    color: var(--muted);
+    margin-top: 0.2rem;
+  }
+  .flow-step:not(:last-child)::after {
+    content: "→";
+    position: absolute;
+    right: -0.9rem;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--accent);
+    font-size: 1.3rem;
+    z-index: 2;
+  }
+  @media (max-width: 768px) {
+    .flow { grid-template-columns: 1fr 1fr; }
+    .flow-step:not(:last-child)::after { display: none; }
+  }
+
+  /* ───── Footer ───── */
+  footer {
+    text-align: center;
+    color: var(--muted);
+    font-size: 0.85rem;
+    padding: 2rem;
+    border-top: 1px solid var(--border);
+    margin-top: 3rem;
+  }
+  footer code {
+    background: var(--bg-2);
+    color: var(--accent);
+    padding: 0.1em 0.4em;
+    border-radius: 4px;
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+  }
+</style>
+</head>
+<body>
+
+  <header class="hero">
+    <h1>ai_news_scraping</h1>
+    <p class="tag">
+      매일 아침 영어권 AI 매체에서 기사를 자동 수집하고, Gemini 로 한국어 트렌드 정리본을 만들어 메일로 전달하는 서비스.
+    </p>
+    <div class="badges">
+      <span class="badge live">production-ready</span>
+      <span class="badge">현재 모델 <strong>gemini-3.5-flash</strong></span>
+      <span class="badge">142 tests</span>
+      <span class="badge">월 비용 <strong>$0</strong></span>
+      <span class="badge">발송 시각 <strong>08:40 KST</strong></span>
+    </div>
+  </header>
+
+  <nav class="tabs">
+    <div class="tab-list">
+      <button class="tab-btn active" data-panel="overview">개요</button>
+      <button class="tab-btn" data-panel="pipeline">파이프라인 (5 단계)</button>
+      <button class="tab-btn" data-panel="modules">모듈 구조</button>
+      <button class="tab-btn" data-panel="data">데이터 모델</button>
+      <button class="tab-btn" data-panel="external">외부 의존</button>
+      <button class="tab-btn" data-panel="ops">운영</button>
+    </div>
+  </nav>
+
+  <main>
+
+    <!-- ──────────── Overview ──────────── -->
+    <section class="panel active" id="overview">
+      <h2>한눈에 보기</h2>
+      <p class="muted">대표님이 출근 전 5분 안에 그날의 AI 트렌드를 따라잡을 수 있게 하는 자동 메일 서비스.</p>
+
+      <div class="kpis">
+        <div class="kpi"><div class="kpi-val">5</div><div class="kpi-lbl">검색 키워드</div></div>
+        <div class="kpi"><div class="kpi-val">10</div><div class="kpi-lbl">매체 화이트리스트</div></div>
+        <div class="kpi"><div class="kpi-val">10~20</div><div class="kpi-lbl">발송당 기사 수</div></div>
+        <div class="kpi"><div class="kpi-val">~10명</div><div class="kpi-lbl">구독자</div></div>
+        <div class="kpi"><div class="kpi-val">$0</div><div class="kpi-lbl">월 비용</div></div>
+      </div>
+
+      <h3>5단계 데이터 흐름</h3>
+      <div class="flow">
+        <div class="flow-step" onclick="switchTab('pipeline'); expandStage(0);">
+          <div class="icon">🔍</div>
+          <div class="name">검색</div>
+          <div class="sub">Brave Search</div>
+        </div>
+        <div class="flow-step" onclick="switchTab('pipeline'); expandStage(1);">
+          <div class="icon">📄</div>
+          <div class="name">본문 추출</div>
+          <div class="sub">trafilatura</div>
+        </div>
+        <div class="flow-step" onclick="switchTab('pipeline'); expandStage(2);">
+          <div class="icon">💾</div>
+          <div class="name">DB 저장</div>
+          <div class="sub">Supabase</div>
+        </div>
+        <div class="flow-step" onclick="switchTab('pipeline'); expandStage(3);">
+          <div class="icon">🤖</div>
+          <div class="name">요약·번역</div>
+          <div class="sub">Gemini</div>
+        </div>
+        <div class="flow-step" onclick="switchTab('pipeline'); expandStage(4);">
+          <div class="icon">📧</div>
+          <div class="name">메일 발송</div>
+          <div class="sub">Gmail SMTP</div>
+        </div>
+      </div>
+
+      <p class="muted">단계별 상세는 위 카드 클릭 또는 "파이프라인" 탭으로.</p>
+
+      <h3>핵심 설계 결정</h3>
+      <div class="cards">
+        <div class="card">
+          <h4><span class="icon">🌐</span>도메인 분리 가능</h4>
+          <p><code>domains/&lt;name&gt;/keywords.yaml</code> + <code>sources.yaml</code> 만 갈아끼우면 다른 토픽 (헬스케어/핀테크 등) 으로 재사용. 코드 수정 X.</p>
+        </div>
+        <div class="card">
+          <h4><span class="icon">🔒</span>schema 격리</h4>
+          <p>모든 테이블을 <code>ai_news</code> schema 에 두어 같은 Supabase 프로젝트의 다른 서비스와 충돌 없음.</p>
+        </div>
+        <div class="card">
+          <h4><span class="icon">🎯</span>3위일체 검색</h4>
+          <p>키워드 + 매체 화이트리스트 (<code>site:</code>) + 최신순 (<code>freshness=pd</code>) 한 쿼리에 묶음 → 키워드당 1 호출.</p>
+        </div>
+        <div class="card">
+          <h4><span class="icon">🛡️</span>2단 방어 본문 추출</h4>
+          <p>URL 패턴 휴리스틱 (카테고리/홈페이지 차단) + 본문 길이 ≥ 500자 검증 → 메일에 매체 인덱스 페이지 안 섞임.</p>
+        </div>
+        <div class="card">
+          <h4><span class="icon">🇰🇷</span>통합 정리, 개별 번역 X</h4>
+          <p>Gemini 가 10~20개 영문 본문을 받아 그날의 AI 트렌드를 한국어 마크다운 단일 디지스트로 정리. 기사별 번역 X.</p>
+        </div>
+        <div class="card">
+          <h4><span class="icon">🔄</span>완전 무료 운영</h4>
+          <p>Brave Search (월 2,000 cap), Supabase (500MB), Gemini Flash, Gmail SMTP, GitHub Actions cron — 전부 free tier 안.</p>
+        </div>
+      </div>
+
+      <div class="callout">
+        <span class="lbl">📌 비전 출처:</span>
+        모든 설계 결정은 <code>CLAUDE.md</code> 의 비전/사양 8 항목 (vision-intake 가 동결한 영역) 에서 도출.
+      </div>
+    </section>
+
+    <!-- ──────────── Pipeline ──────────── -->
+    <section class="panel" id="pipeline">
+      <h2>5단계 파이프라인 (자세히)</h2>
+      <p class="muted">각 단계 카드를 클릭하면 입력/출력/실패 처리 + 코드 위치가 펼쳐집니다.</p>
+
+      <div class="pipeline" id="stages">
+
+        <div class="stage">
+          <div class="stage-head">
+            <div class="stage-num">1</div>
+            <div class="stage-title">
+              <strong>검색 — Brave Search 3위일체</strong>
+              <span>키워드 × 매체 × 최신순 → URL 리스트</span>
+            </div>
+            <div class="stage-chevron">›</div>
+          </div>
+          <div class="stage-body"><div class="stage-body-inner">
+            <div class="label">입력</div>
+            <p><code>keywords</code> (5개) × <code>source_domains</code> (10개)</p>
+
+            <div class="label">호출</div>
+            <p>키워드별 1회. 호출당 매체 10개를 <code>site:(d1 OR d2 ... OR d10)</code> 로 한 쿼리에 묶음.</p>
+            <pre>GET https://api.search.brave.com/res/v1/web/search
+?q="artificial intelligence" (site:techcrunch.com OR site:theverge.com ...)
+&amp;count=10
+&amp;freshness=pd        # past day
+Headers: X-Subscription-Token: $BRAVE_SEARCH_API_KEY</pre>
+
+            <div class="label">필터 (2단)</div>
+            <p>① <code>meta_url.hostname</code> 으로 화이트리스트 재검증<br>
+               ② URL 패턴 휴리스틱 — 카테고리/홈페이지 (<code>/blog/</code>, <code>/category/</code>, segment &lt; 2 등) 제외</p>
+
+            <div class="label">출력</div>
+            <p><code>SearchResult(url, title, snippet, source_domain, keyword)</code> list</p>
+
+            <div class="label">Rate limit 보호</div>
+            <p>Brave Free = 1 query/sec. <code>pipeline.run()</code> 이 키워드 사이 <code>1.2초 sleep</code>.</p>
+
+            <div class="label">실패 처리</div>
+            <p>한 키워드 실패 (네트워크/429) 시 그 키워드만 skip, 다른 키워드는 계속.</p>
+
+            <div class="label">코드</div>
+            <p><code>src/ai_news_scraping/search.py</code> · <code>pipeline.py::run()</code> §1</p>
+          </div></div>
+        </div>
+
+        <div class="stage-arrow">▼</div>
+
+        <div class="stage">
+          <div class="stage-head">
+            <div class="stage-num">2</div>
+            <div class="stage-title">
+              <strong>본문 추출 — trafilatura + 브라우저 UA</strong>
+              <span>URL → 영문 본문 텍스트 + 메타데이터</span>
+            </div>
+            <div class="stage-chevron">›</div>
+          </div>
+          <div class="stage-body"><div class="stage-body-inner">
+            <div class="label">입력</div>
+            <p>1단계의 URL list (dedup 후 새 URL 만)</p>
+
+            <div class="label">Dedup</div>
+            <p><code>store.existing_urls(urls)</code> 로 articles 테이블 IN 조회 → 이미 있는 URL 제외 → 새 URL 만 fetch.</p>
+
+            <div class="label">Fetch</div>
+            <p><code>requests.get(url, headers=BROWSER_HEADERS)</code> — User-Agent: Chrome 120 + Accept-Language: en-US.</p>
+            <pre>Headers:
+  User-Agent: Mozilla/5.0 (Macintosh; ... Chrome/120.0.0.0 Safari/537.36)
+  Accept: text/html,application/xhtml+xml,...
+  Accept-Language: en-US,en;q=0.9</pre>
+
+            <div class="label">Extract</div>
+            <p><code>trafilatura.extract(html)</code> → 본문 텍스트<br>
+               <code>trafilatura.extract_metadata(html)</code> → title, date</p>
+
+            <div class="label">품질 검증</div>
+            <p>본문 길이 ≥ <code>MIN_BODY_LEN (500자)</code> 이어야 통과. 미달이면 ExtractionError (카테고리 페이지 2단 방어).</p>
+
+            <div class="label">출력</div>
+            <p><code>ExtractedArticle(url, title, body_text, raw_html_excerpt, published_at, source_domain)</code></p>
+
+            <div class="label">실패 처리</div>
+            <p>403 / paywall / JS 동적 렌더 매체는 자동 skip + 로그.</p>
+
+            <div class="label">코드</div>
+            <p><code>src/ai_news_scraping/extract.py</code></p>
+          </div></div>
+        </div>
+
+        <div class="stage-arrow">▼</div>
+
+        <div class="stage">
+          <div class="stage-head">
+            <div class="stage-num">3</div>
+            <div class="stage-title">
+              <strong>DB 저장 — Supabase (ai_news.articles)</strong>
+              <span>article upsert + dedup 키 보존</span>
+            </div>
+            <div class="stage-chevron">›</div>
+          </div>
+          <div class="stage-body"><div class="stage-body-inner">
+            <div class="label">입력</div>
+            <p>2단계의 <code>ExtractedArticle</code> + <code>keyword</code> + <code>run_id</code></p>
+
+            <div class="label">Upsert</div>
+            <pre>client.schema("ai_news").table("articles")
+      .upsert(payload, on_conflict="url")
+      .execute()</pre>
+            <p><code>url</code> 유니크 충돌 시 update. 이후 dedup 의 source of truth.</p>
+
+            <div class="label">출력</div>
+            <p>(부수효과) DB row 생성/갱신. 반환값 사용 X.</p>
+
+            <div class="label">보안</div>
+            <p>RLS 모든 테이블 ON. <code>SUPABASE_SERVICE_ROLE_KEY</code> 만 우회. anon/authenticated 접근 0.</p>
+
+            <div class="label">코드</div>
+            <p><code>src/ai_news_scraping/store.py::SupabaseArticleStore</code></p>
+          </div></div>
+        </div>
+
+        <div class="stage-arrow">▼</div>
+
+        <div class="stage">
+          <div class="stage-head">
+            <div class="stage-num">4</div>
+            <div class="stage-title">
+              <strong>요약·번역 — Gemini 통합 정리</strong>
+              <span>영문 N건 → 한국어 마크다운 1개</span>
+            </div>
+            <div class="stage-chevron">›</div>
+          </div>
+          <div class="stage-body"><div class="stage-body-inner">
+            <div class="label">입력</div>
+            <p>최대 20건 (<code>max_articles_for_summary</code>) 의 <code>SummaryInput(title, source_domain, url, body_text, published_at)</code></p>
+
+            <div class="label">현재 모델</div>
+            <p><code>gemini-3.5-flash</code> (Google AI Studio 무료 tier). 변경은 <code>.env</code> 의 <code>GEMINI_MODEL</code>.</p>
+
+            <div class="label">프롬프트 (5 규칙)</div>
+            <pre>1. 개별 기사 번역이 아닌, 트렌드 단위로 통합 정리하라.
+2. 비슷한 주제는 한 단락으로 묶고, 출처 매체를 함께 명시하라.
+3. 출근 전 5분 안에 읽을 수 있는 분량으로 작성하라.
+4. 각 트렌드 끝에 출처 링크를 [매체명](URL) 형식으로 첨부하라.
+5. 출력은 한국어 마크다운만. 영어 원문 인용 최소화.</pre>
+
+            <div class="label">컨텍스트 보호</div>
+            <p>기사당 본문 <code>4000자 cap</code>. 20개 × 4000 = 80,000자 ≈ 20,000 토큰 (Gemini 1M context 의 2%).</p>
+
+            <div class="label">출력</div>
+            <p><code>SummaryOutput(digest_markdown, model, article_count)</code></p>
+
+            <div class="label">아키텍처</div>
+            <p>실제 SDK 호출은 <code>_GeminiSdkAdapter</code> 가 wrap.
+            테스트는 <code>GeminiClient</code> Protocol 로 mock (network 호출 0).</p>
+
+            <div class="label">코드</div>
+            <p><code>src/ai_news_scraping/summarize.py</code></p>
+          </div></div>
+        </div>
+
+        <div class="stage-arrow">▼</div>
+
+        <div class="stage">
+          <div class="stage-head">
+            <div class="stage-num">5</div>
+            <div class="stage-title">
+              <strong>메일 발송 — Gmail SMTP BCC</strong>
+              <span>한국어 마크다운 → HTML 메일 → 구독자 일괄</span>
+            </div>
+            <div class="stage-chevron">›</div>
+          </div>
+          <div class="stage-body"><div class="stage-body-inner">
+            <div class="label">입력</div>
+            <p>Gemini 결과 <code>digest_markdown</code> + 구독자 명단 (<code>subscribers</code> 테이블에서 <code>active=true</code> 만)</p>
+
+            <div class="label">메일 구성</div>
+            <p>제목: <code>오늘의 AI 트렌드 ({YYYY-MM-DD})</code><br>
+               본문 multipart:<br>
+               · plain text — 원본 마크다운<br>
+               · HTML — markdown → HTML 변환 (markdown 라이브러리, extensions=extra+sane_lists)</p>
+
+            <div class="label">발송 방식</div>
+            <pre>From: $GMAIL_USER
+To:   $GMAIL_USER          # 본인
+Bcc:  alice@x, bob@x, ...  # 구독자 전체 (서로 주소 노출 X)</pre>
+
+            <div class="label">SMTP</div>
+            <p><code>smtp.gmail.com:587</code> + STARTTLS + 앱 비밀번호 인증.</p>
+
+            <div class="label">출력</div>
+            <p><code>MailSendResult(accepted=[...], refused={addr: reason})</code></p>
+
+            <div class="label">실패 처리</div>
+            <p>일부 주소 refused 시 부분 성공 보고. <code>smtp.quit()</code> 실패는 swallow (이미 발송 끝남).</p>
+
+            <div class="label">dry_run 분기</div>
+            <p><code>params.dry_run=True</code> 면 이 단계 자체를 skip → <code>status="skipped" reason="dry_run"</code> 반환.</p>
+
+            <div class="label">코드</div>
+            <p><code>src/ai_news_scraping/mail.py</code></p>
+          </div></div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ──────────── Modules ──────────── -->
+    <section class="panel" id="modules">
+      <h2>모듈 구조</h2>
+      <p class="muted">각 모듈은 단일 책임. 테스트 가능성을 위해 외부 의존성은 모두 protocol/DI 로 추상화.</p>
+
+      <h3>📥 데이터 수집 계층</h3>
+      <div class="module">
+        <div class="module-head">
+          <span class="module-name">search.py</span>
+          <span class="module-role">Brave Search API wrapper — 3위일체 검색</span>
+        </div>
+        <div class="module-deps">의존: <code>requests</code> · 호출자: <code>pipeline.run()</code></div>
+      </div>
+      <div class="module">
+        <div class="module-head">
+          <span class="module-name">extract.py</span>
+          <span class="module-role">trafilatura + 브라우저 UA — URL → 본문</span>
+        </div>
+        <div class="module-deps">의존: <code>trafilatura</code> <code>requests</code> · 호출자: <code>pipeline.run()</code></div>
+      </div>
+      <div class="module">
+        <div class="module-head">
+          <span class="module-name">domain_config.py</span>
+          <span class="module-role">YAML 로더 — 키워드 + 매체 화이트리스트</span>
+        </div>
+        <div class="module-deps">의존: <code>pyyaml</code> · 호출자: <code>cli.py</code></div>
+      </div>
+
+      <h3>💾 영속화 계층</h3>
+      <div class="module">
+        <div class="module-head">
+          <span class="module-name">store.py</span>
+          <span class="module-role">ArticleStore (InMemory + Supabase) — url unique upsert</span>
+        </div>
+        <div class="module-deps">의존: <code>supabase</code> · 호출자: <code>pipeline.run()</code></div>
+      </div>
+      <div class="module">
+        <div class="module-head">
+          <span class="module-name">subscriber_store.py</span>
+          <span class="module-role">SubscriberStore — email 명단 관리</span>
+        </div>
+        <div class="module-deps">의존: <code>supabase</code> · 호출자: <code>admin.py</code> · <code>cli.py</code></div>
+      </div>
+      <div class="module">
+        <div class="module-head">
+          <span class="module-name">scrape_state_store.py</span>
+          <span class="module-role">ScrapeStateStore — ON/OFF 싱글톤 토글</span>
+        </div>
+        <div class="module-deps">의존: <code>supabase</code> · 호출자: <code>admin.py</code> · <code>cli.py</code></div>
+      </div>
+
+      <h3>🧠 처리 계층</h3>
+      <div class="module">
+        <div class="module-head">
+          <span class="module-name">summarize.py</span>
+          <span class="module-role">Gemini → 한국어 통합 트렌드 정리</span>
+        </div>
+        <div class="module-deps">의존: <code>google-genai</code> · 호출자: <code>pipeline.run()</code></div>
+      </div>
+      <div class="module">
+        <div class="module-head">
+          <span class="module-name">mail.py</span>
+          <span class="module-role">Gmail SMTP BCC 일괄 발송 + plain/HTML multipart</span>
+        </div>
+        <div class="module-deps">의존: <code>smtplib</code>(stdlib) <code>markdown</code> · 호출자: <code>pipeline.run()</code></div>
+      </div>
+
+      <h3>🎯 오케스트레이션 + 진입점</h3>
+      <div class="module">
+        <div class="module-head">
+          <span class="module-name">pipeline.py</span>
+          <span class="module-role"><strong>핵심.</strong> 5 단계 end-to-end. PipelineParams / Deps / Result.</span>
+        </div>
+        <div class="module-deps">호출자: <code>cli.py::run_command()</code></div>
+      </div>
+      <div class="module">
+        <div class="module-head">
+          <span class="module-name">cli.py</span>
+          <span class="module-role">argparse + 게이트 (scrape ON/OFF, subscribers 0) → pipeline.run()</span>
+        </div>
+        <div class="module-deps">진입: <code>python -m ai_news_scraping.cli run [--dry-run]</code></div>
+      </div>
+      <div class="module">
+        <div class="module-head">
+          <span class="module-name">admin.py + templates/admin.html</span>
+          <span class="module-role">FastAPI 단일 HTML — 스크래핑 토글 + 구독자 form</span>
+        </div>
+        <div class="module-deps">의존: <code>fastapi</code> <code>jinja2</code> · 인증: HTTPBasic + ADMIN_TOKEN</div>
+      </div>
+      <div class="module">
+        <div class="module-head">
+          <span class="module-name">config.py</span>
+          <span class="module-role">pydantic-settings 기반 typed env loader</span>
+        </div>
+        <div class="module-deps">의존: <code>pydantic-settings</code> · 호출자: <code>cli.py</code></div>
+      </div>
+
+      <div class="callout purple">
+        <span class="lbl">🧪 테스트:</span>
+        모듈마다 InMemory 또는 Fake 구현 존재 → 외부 네트워크 호출 0으로 142개 단위·통합 테스트 통과. CI 실행 1초 미만.
+      </div>
+    </section>
+
+    <!-- ──────────── Data Model ──────────── -->
+    <section class="panel" id="data">
+      <h2>데이터 모델 (ai_news schema)</h2>
+      <p class="muted">Supabase Postgres. 모든 테이블에 RLS 활성화 — service_role 키만 우회 가능.</p>
+
+      <div class="schema-grid">
+        <div class="schema-tbl">
+          <h4>ai_news.articles</h4>
+          <ul>
+            <li><strong class="pk">id</strong> <span class="type">bigserial</span></li>
+            <li><strong>url</strong> <span class="type">text unique</span></li>
+            <li><strong>title</strong> <span class="type">text</span></li>
+            <li><strong>source_domain</strong> <span class="type">text</span></li>
+            <li><strong>source_name</strong> <span class="type">text</span></li>
+            <li><strong>published_at</strong> <span class="type">timestamptz</span></li>
+            <li><strong>body_text</strong> <span class="type">text</span></li>
+            <li><strong>raw_html_excerpt</strong> <span class="type">text</span></li>
+            <li><strong>keyword</strong> <span class="type">text</span></li>
+            <li><strong>run_id</strong> <span class="type">uuid</span></li>
+            <li><strong>fetched_at</strong> <span class="type">timestamptz</span></li>
+          </ul>
+        </div>
+
+        <div class="schema-tbl">
+          <h4>ai_news.subscribers</h4>
+          <ul>
+            <li><strong class="pk">id</strong> <span class="type">bigserial</span></li>
+            <li><strong>email</strong> <span class="type">text unique</span></li>
+            <li><strong>active</strong> <span class="type">boolean</span></li>
+            <li><strong>created_at</strong> <span class="type">timestamptz</span></li>
+            <li><strong>updated_at</strong> <span class="type">timestamptz</span></li>
+          </ul>
+        </div>
+
+        <div class="schema-tbl">
+          <h4>ai_news.runs</h4>
+          <ul>
+            <li><strong class="pk">run_id</strong> <span class="type">uuid</span></li>
+            <li><strong>started_at</strong> <span class="type">timestamptz</span></li>
+            <li><strong>finished_at</strong> <span class="type">timestamptz</span></li>
+            <li><strong>article_count</strong> <span class="type">int</span></li>
+            <li><strong>status</strong> <span class="type">text</span></li>
+            <li><strong>error</strong> <span class="type">text</span></li>
+            <li><strong>digest_text</strong> <span class="type">text</span></li>
+          </ul>
+        </div>
+
+        <div class="schema-tbl">
+          <h4>ai_news.scrape_enabled</h4>
+          <ul>
+            <li><strong class="pk">id</strong> <span class="type">int (always 1)</span></li>
+            <li><strong>enabled</strong> <span class="type">boolean</span></li>
+            <li><strong>updated_at</strong> <span class="type">timestamptz</span></li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="callout green">
+        <span class="lbl">🔒 RLS:</span>
+        4 테이블 모두 <code>enable row level security</code>. 별도 policy 없음 → service_role 키 (RLS 우회 권한) 만 통과.
+        anon/authenticated 키로는 어떤 read/write 도 불가능.
+      </div>
+
+      <div class="callout">
+        <span class="lbl">🏷️ schema 격리:</span>
+        <code>public</code> 이 아닌 <code>ai_news</code> schema 에 둠. 같은 Supabase 프로젝트에 다른 서비스를 올려도 충돌 0.
+        반드시 Dashboard → Settings → API → "Exposed schemas" 에 <code>ai_news</code> 추가 필요.
+      </div>
+    </section>
+
+    <!-- ──────────── External ──────────── -->
+    <section class="panel" id="external">
+      <h2>외부 의존성</h2>
+      <p class="muted">모두 free tier 안에서 운영. 어떤 항목도 유료 진입 시 대표님께 보고 후 결정 (CLAUDE.md §7).</p>
+
+      <table>
+        <thead>
+          <tr><th>영역</th><th>선택</th><th>무료 한도</th><th>우리 사용량</th><th>인증</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>검색</td>
+            <td><strong>Brave Search</strong></td>
+            <td>월 2,000</td>
+            <td>월 ~150 (일 5×30)</td>
+            <td><code>X-Subscription-Token</code> header</td>
+          </tr>
+          <tr>
+            <td>본문 fetch</td>
+            <td><strong>requests + trafilatura</strong></td>
+            <td>—</td>
+            <td>일 ~50 (URL 수)</td>
+            <td>브라우저 UA</td>
+          </tr>
+          <tr>
+            <td>LLM</td>
+            <td><strong>Gemini 3.5 Flash</strong></td>
+            <td>분당 15 RPM (무료 tier)</td>
+            <td>일 1회 호출</td>
+            <td><code>?key=$GEMINI_API_KEY</code></td>
+          </tr>
+          <tr>
+            <td>DB</td>
+            <td><strong>Supabase Postgres</strong></td>
+            <td>500MB</td>
+            <td>~수MB / 년</td>
+            <td><code>SUPABASE_SERVICE_ROLE_KEY</code> JWT</td>
+          </tr>
+          <tr>
+            <td>메일</td>
+            <td><strong>Gmail SMTP</strong></td>
+            <td>일 500 발송</td>
+            <td>일 1회 × N명 BCC</td>
+            <td>앱 비밀번호</td>
+          </tr>
+          <tr>
+            <td>스케줄러</td>
+            <td><strong>GitHub Actions cron</strong></td>
+            <td>월 2,000분 (private)</td>
+            <td>월 ~15분</td>
+            <td>repository secrets</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout warn">
+        <span class="lbl">⚠️ Brave rate limit:</span>
+        Free tier 는 <strong>1 query/sec</strong> 이라 pipeline 에 키워드 사이 1.2초 sleep 으로 우회.
+        총 검색 단계 ~7초 소요.
+      </div>
+    </section>
+
+    <!-- ──────────── Ops ──────────── -->
+    <section class="panel" id="ops">
+      <h2>운영</h2>
+
+      <h3>스케줄</h3>
+      <pre>cron: "40 23 * * *"   # UTC = 23:40 → KST 08:40 (다음날)
+GitHub Actions runner: ubuntu-latest, timeout 15분</pre>
+      <p class="muted">GitHub Actions cron 은 부하 높을 때 ~15분 지연 가능 — CLAUDE.md §4 의 ±30분 허용 범위 안.</p>
+
+      <h3>매일 실행 흐름</h3>
+      <ol style="padding-left: 1.4rem; color: var(--fg);">
+        <li>cron trigger → <code>uv sync --frozen</code></li>
+        <li><code>python -m ai_news_scraping.cli run</code></li>
+        <li>scrape_enabled 토글 확인 (OFF 면 skip + exit 0)</li>
+        <li>subscribers 명단 조회 (active=true)</li>
+        <li>비어 있으면 skip + exit 0</li>
+        <li>pipeline.run() — 5 단계</li>
+        <li>SMTP 발송 결과 로그</li>
+      </ol>
+
+      <h3>수동 트리거</h3>
+      <pre>GitHub Actions → Daily AI News Digest → Run workflow
+- inputs.dry_run = true / false
+- 즉시 실행 (cron 대기 X)</pre>
+
+      <h3>일시 중단</h3>
+      <p>로컬 admin 페이지 (<code>http://127.0.0.1:8000</code>) 의 "토글" 버튼 → OFF.
+      다음 cron 부터 자동 skip. 재개는 토글 ON.</p>
+
+      <h3>로컬 검증</h3>
+      <pre><span style="color: var(--muted);"># 발송 없이 흐름만</span>
+uv run python -m ai_news_scraping.cli run --dry-run
+
+<span style="color: var(--muted);"># 본인 메일로 실 발송</span>
+uv run python -m ai_news_scraping.cli run
+
+<span style="color: var(--muted);"># 테스트</span>
+uv run pytest          <span style="color: var(--muted);"># 142 tests</span>
+uv run ruff check .    <span style="color: var(--muted);"># lint</span>
+uv run mypy            <span style="color: var(--muted);"># typecheck</span></pre>
+
+      <h3>도메인 변경 (재사용)</h3>
+      <pre>mkdir -p domains/health_news
+<span style="color: var(--muted"># keywords.yaml + sources.yaml 작성</span>
+uv run python -m ai_news_scraping.cli run --domain health_news</pre>
+
+      <div class="callout green">
+        <span class="lbl">✅ 완료된 산출물:</span>
+        4 핵심 산출물 (검색·수집 파이프라인 / LLM 통합 요약·번역기 / 메일 발송기 / admin 페이지) 모두 코드 레벨 구현.
+        실 발송 1회 성공 후 GitHub Actions secrets 8개 등록만 남음.
+      </div>
+    </section>
+
+  </main>
+
+  <footer>
+    📄 <code>architecture.html</code> · 생성: 2026-05-23 · ralph v3-classic harness<br>
+    상세 셋업은 <code>setup-guide.html</code>, 운영 명령은 <code>README.md</code> 참조.
+  </footer>
+
+<script>
+  // ───── Tabs ─────
+  const tabs = document.querySelectorAll('.tab-btn');
+  const panels = document.querySelectorAll('.panel');
+  function switchTab(name) {
+    tabs.forEach(t => t.classList.toggle('active', t.dataset.panel === name));
+    panels.forEach(p => p.classList.toggle('active', p.id === name));
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+  tabs.forEach(t => t.addEventListener('click', () => switchTab(t.dataset.panel)));
+
+  // ───── Pipeline stages: click to expand ─────
+  const stages = document.querySelectorAll('#stages .stage');
+  stages.forEach((s, i) => {
+    s.addEventListener('click', (e) => {
+      // Don't toggle when clicking inside body (so user can select text)
+      if (e.target.closest('.stage-body')) return;
+      s.classList.toggle('expanded');
+    });
+  });
+
+  function expandStage(idx) {
+    setTimeout(() => {
+      const s = stages[idx];
+      if (!s) return;
+      s.classList.add('expanded');
+      s.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 200);
+  }
+
+  // ───── Allow deep-link via hash ─────
+  const hashPanel = window.location.hash.replace('#', '');
+  if (hashPanel && document.getElementById(hashPanel)) {
+    switchTab(hashPanel);
+  }
+</script>
+
+</body>
+</html>

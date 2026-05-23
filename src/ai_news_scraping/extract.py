@@ -17,7 +17,7 @@ from urllib.parse import urlparse
 import requests
 import trafilatura
 
-MIN_BODY_LEN = 500  # 카테고리 페이지가 URL 필터 우회해도 body 짧아 막힘
+MIN_BODY_LEN = 300  # 카테고리 페이지가 URL 필터 우회해도 body 짧아 막힘
 RAW_EXCERPT_LEN = 500
 FETCH_TIMEOUT_SECONDS = 15.0
 

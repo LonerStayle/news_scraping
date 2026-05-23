@@ -44,9 +44,9 @@ class PipelineParams:
     gmail_user: str
     gmail_password: str
     dry_run: bool = False
-    num_results_per_keyword: int = 10
+    num_results_per_keyword: int = 20  # Brave max — 더 많은 후보 확보
     max_articles_for_summary: int = 20
-    freshness: str = "pd"  # Brave Search: past day
+    freshness: str = "pw"  # Brave Search: past week — pd 보다 풍부
     search_delay_seconds: float = 1.2  # Brave Free: 1 query/sec rate limit
     subject_template: str = "오늘의 AI 트렌드 ({date})"
 

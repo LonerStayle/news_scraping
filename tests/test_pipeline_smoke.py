@@ -255,7 +255,7 @@ def test_smoke_end_to_end_through_real_modules() -> None:
     # 외부 경계 호출 검증
     assert len(http.calls) == 1, "키워드 1개 → Brave 호출 1회 (CLAUDE.md §6)"
     assert "site:a.com OR site:b.com" in http.calls[0]["params"]["q"]
-    assert http.calls[0]["params"]["freshness"] == "pd"
+    assert http.calls[0]["params"]["freshness"] == "pw"
     assert http.calls[0]["headers"]["X-Subscription-Token"] == "BSK"
 
     assert len(fetchers.urls_fetched) == 2  # 두 URL 각각 fetch
