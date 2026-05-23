@@ -38,6 +38,22 @@
 - [x] `tests/` — 각 wrapper 단위 테스트 (mock 외부 API) + pipeline 통합 smoke test
 - [x] `README.md` 갱신 — 셋업 / secrets 등록 / 로컬 dry-run / 운영 가이드
 
+### Phase F — 검색 조건 admin 화 (yaml → DB)
+
+> 대표님 피드백: 키워드·매체·운영옵션을 admin 페이지에서 운영 중 변경 가능해야 함.
+> yaml 은 seed 용으로 유지 (도메인 재사용 starting point), DB 우선·yaml fallback.
+
+- [ ] (F1) `0002_search_admin.sql` 마이그레이션 — `ai_news.search_keywords` / `ai_news.search_sources` / `ai_news.search_settings` 3 테이블 + RLS + seed singleton row + 테스트
+- [ ] (F2) `search_config_store.py` 신규 — `KeywordStore`, `SourceStore`, `SettingsStore` 3 protocol + InMemory + Supabase 구현 + 테스트
+- [ ] (F3) `pipeline.py` 가 DB store 우선 로드, 비어있으면 yaml fallback — `load_search_config(stores, yaml_fallback) -> (keywords, sources, settings)` 헬퍼
+- [ ] (F4) `cli.py` 의 `_entry_run` 이 store 들 초기화 + seed (DB 비었으면 yaml 에서 자동 import 1회)
+- [ ] (F5) `admin.py` 키워드 라우트 — `GET /keywords`, `POST /keywords`, `POST /keywords/{id}/delete`, `POST /keywords/{id}/toggle`
+- [ ] (F6) `admin.py` 매체 라우트 — `GET /sources`, `POST /sources` (domain + name), `POST /sources/{id}/delete`, `POST /sources/{id}/toggle`
+- [ ] (F7) `admin.py` 설정 라우트 — `GET /settings`, `POST /settings` (freshness / num_results / max_articles / min_body_len 일괄 update)
+- [ ] (F8) `templates/admin.html` 탭 구조로 개편 — Overview / Keywords / Sources / Settings 4 탭
+- [ ] (F9) 통합 smoke test 갱신 — DB store 로 운영 조건 로드되는 케이스 추가
+- [ ] (F10) `CLAUDE.md` §6 / setup-guide.html §3 / README.md 운영 가이드 갱신 — admin 페이지 운영 흐름
+
 ---
 
 ## 완료 조건 (PROJECT_DONE)
