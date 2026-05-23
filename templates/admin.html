@@ -172,6 +172,28 @@
 
     form.inline { display: inline-block; margin: 0; }
 
+    /* ─── Row action group (수정/토글/삭제 + 저장/취소) ─── */
+    .view-actions, .edit-actions {
+      display: inline-flex;
+      gap: 0.3rem;
+      align-items: center;
+      flex-wrap: nowrap;
+      white-space: nowrap;
+    }
+    .view-actions form.inline, .edit-actions form.inline { display: inline-flex; }
+    .view-actions button, .edit-actions button {
+      padding: 0.35rem 0.7rem;
+      font-size: 0.78rem;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    /* 액션 컬럼은 줄바꿈 없이 고정 폭. */
+    td.actions-cell {
+      white-space: nowrap;
+      text-align: right;
+      width: 1px;  /* shrink-to-fit */
+    }
+
     /* ─── Forms ─── */
     .add-form {
       display: flex;
@@ -418,9 +440,11 @@
               <td><code>{{ k.id }}</code></td>
               <td>{{ k.keyword }}</td>
               <td>{{ "✔︎" if k.active else "—" }}</td>
-              <td>
-                <form class="inline" method="post" action="/keywords/{{ k.id }}/toggle"><button>토글</button></form>
-                <form class="inline" method="post" action="/keywords/{{ k.id }}/delete"><button class="danger">삭제</button></form>
+              <td class="actions-cell">
+                <span class="view-actions">
+                  <form class="inline" method="post" action="/keywords/{{ k.id }}/toggle"><button>토글</button></form>
+                  <form class="inline" method="post" action="/keywords/{{ k.id }}/delete"><button class="danger">삭제</button></form>
+                </span>
               </td>
             </tr>
             {% endfor %}
@@ -453,7 +477,7 @@
               <td class="cell-name"><span class="view">{{ s.name }}</span><input class="edit-input edit-only" name="name" value="{{ s.name }}" style="display:none;"></td>
               <td class="cell-description"><span class="view" style="color: var(--muted);">{{ s.description or "—" }}</span><input class="edit-input edit-only" name="description" value="{{ s.description or '' }}" style="display:none;"></td>
               <td>{{ "✔︎" if s.active else "—" }}</td>
-              <td>
+              <td class="actions-cell">
                 <span class="view-actions">
                   <button class="edit-btn" data-id="{{ s.id }}">수정</button>
                   <form class="inline" method="post" action="/sources/{{ s.id }}/toggle"><button>토글</button></form>
@@ -530,7 +554,11 @@
               <td><code>{{ s.id }}</code></td>
               <td>{{ s.email }}</td>
               <td>{{ "✔︎" if s.active else "—" }}</td>
-              <td><form class="inline" method="post" action="/subscribers/{{ s.id }}/delete"><button class="danger">삭제</button></form></td>
+              <td class="actions-cell">
+                <span class="view-actions">
+                  <form class="inline" method="post" action="/subscribers/{{ s.id }}/delete"><button class="danger">삭제</button></form>
+                </span>
+              </td>
             </tr>
             {% endfor %}
           </tbody>
