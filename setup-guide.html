@@ -820,43 +820,22 @@ git push -u origin main</pre>
 
     <p>스크래핑 ON/OFF 토글 + 구독자 명단 추가/제거. 로컬에서 실행해 브라우저로 접근.</p>
 
-    <h3>실행</h3>
+    <h3>실행 (한 줄)</h3>
 
-    <pre>uv run python -c "
-import uvicorn
-from ai_news_scraping.admin import create_app
-from ai_news_scraping.config import get_settings
-from supabase import create_client
-from ai_news_scraping.scrape_state_store import SupabaseScrapeStateStore
-from ai_news_scraping.subscriber_store import SupabaseSubscriberStore
-from ai_news_scraping.search_config_store import (
-    SupabaseKeywordStore, SupabaseSourceStore, SupabaseSettingsStore,
-)
+    <pre>uv run python -m ai_news_scraping.cli admin</pre>
 
-s = get_settings()
-client = create_client(s.supabase_url, s.supabase_service_role_key)
-schema = s.supabase_schema
-app = create_app(
-    admin_token=s.admin_token,
-    subscriber_store=SupabaseSubscriberStore(client, schema=schema),
-    scrape_state_store=SupabaseScrapeStateStore(client, schema=schema),
-    keyword_store=SupabaseKeywordStore(client, schema=schema),
-    source_store=SupabaseSourceStore(client, schema=schema),
-    settings_store=SupabaseSettingsStore(client, schema=schema),
-)
-uvicorn.run(app, host='127.0.0.1', port=8000)
-"</pre>
+    <p>기본 포트 <strong>6661</strong>. 변경하려면 <code>--port 6661 --host 127.0.0.1</code>.</p>
 
     <div class="callout tip">
       <span class="label">💡 admin 페이지 5 탭:</span>
       Overview (스크래핑 ON/OFF + 요약) · Keywords (추가/삭제/토글) · Sources (매체 도메인 + name) · Settings (freshness / num_results / max / min_body) · Subscribers (메일 명단).
-      URL 의 hash 로 deep-link 가능 — 예: <code>http://127.0.0.1:8000/#keywords</code>.
+      URL 의 hash 로 deep-link 가능 — 예: <code>http://127.0.0.1:6661/#keywords</code>.
     </div>
 
     <h3>접속</h3>
 
     <ol class="steps">
-      <li>브라우저: <a href="http://127.0.0.1:8000" target="_blank">http://127.0.0.1:8000</a>.</li>
+      <li>브라우저: <a href="http://127.0.0.1:6661" target="_blank">http://127.0.0.1:6661</a>.</li>
       <li>HTTP Basic 인증 팝업:
         <ul>
           <li>Username: 아무 값이나 (예: <code>admin</code>) — 무시됨.</li>

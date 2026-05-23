@@ -161,35 +161,17 @@ Actions 탭 → "Daily AI News Digest" → "Run workflow" → `dry_run` 체크 O
 
 `domains/<name>/*.yaml` 은 **seed 용** — DB 가 비어 있으면 cron 첫 실행 시 yaml 에서 1회 자동 import. 이후 모든 변경은 admin 에서.
 
-로컬 실행:
+로컬 실행 (한 줄):
 ```bash
-uv run python -c "
-import uvicorn
-from ai_news_scraping.admin import create_app
-from ai_news_scraping.config import get_settings
-from supabase import create_client
-from ai_news_scraping.scrape_state_store import SupabaseScrapeStateStore
-from ai_news_scraping.subscriber_store import SupabaseSubscriberStore
-from ai_news_scraping.search_config_store import (
-    SupabaseKeywordStore, SupabaseSourceStore, SupabaseSettingsStore,
-)
-
-s = get_settings()
-client = create_client(s.supabase_url, s.supabase_service_role_key)
-schema = s.supabase_schema
-app = create_app(
-    admin_token=s.admin_token,
-    subscriber_store=SupabaseSubscriberStore(client, schema=schema),
-    scrape_state_store=SupabaseScrapeStateStore(client, schema=schema),
-    keyword_store=SupabaseKeywordStore(client, schema=schema),
-    source_store=SupabaseSourceStore(client, schema=schema),
-    settings_store=SupabaseSettingsStore(client, schema=schema),
-)
-uvicorn.run(app, host='127.0.0.1', port=8000)
-"
+uv run python -m ai_news_scraping.cli admin
 ```
 
-브라우저: http://127.0.0.1:8000 → username 은 임의 / password 는 `ADMIN_TOKEN`.
+옵션:
+```bash
+uv run python -m ai_news_scraping.cli admin --port 6661 --host 127.0.0.1
+```
+
+기본 포트 **6661**. 브라우저: http://127.0.0.1:6661 → username 은 임의 / password 는 `ADMIN_TOKEN`.
 URL hash 로 deep-link: `/#keywords`, `/#sources`, `/#settings`.
 
 ---

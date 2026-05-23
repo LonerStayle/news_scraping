@@ -54,7 +54,7 @@ uv run ruff format .
 
 ```bash
 # admin 페이지 (스크래핑 ON/OFF + 구독자 form)
-# uv run uvicorn ai_news_scraping.admin:app --reload --port 8000
+# uv run python -m ai_news_scraping.cli admin --port 6661
 
 # 수동 1회 발송 트리거 (cron 대신 직접 실행)
 # uv run python -m ai_news_scraping.cli run

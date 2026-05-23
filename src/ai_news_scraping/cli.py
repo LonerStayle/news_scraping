@@ -44,12 +44,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = _parse_args(argv)
     if args.cmd == "run":
         return _entry_run(dry_run=bool(args.dry_run), domain=str(args.domain))
+    if args.cmd == "admin":
+        return _entry_admin(host=str(args.host), port=int(args.port))
     return 2
 
 
 def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(prog="ai_news_scraping")
     sub = parser.add_subparsers(dest="cmd", required=True)
+
     run_p = sub.add_parser("run", help="Run the daily digest pipeline")
     run_p.add_argument(
         "--dry-run",
@@ -61,6 +64,13 @@ def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
         default="ai_news",
         help="domains/<name>/ 의 키워드·매체 config 선택 (기본: ai_news)",
     )
+
+    admin_p = sub.add_parser(
+        "admin", help="Run the admin web UI (FastAPI + Jinja2)"
+    )
+    admin_p.add_argument("--host", default="127.0.0.1")
+    admin_p.add_argument("--port", type=int, default=6661)
+
     return parser.parse_args(argv)
 
 
@@ -98,6 +108,33 @@ def _make_supabase_client(settings: Settings) -> Any:
     from supabase import create_client
 
     return create_client(settings.supabase_url, settings.supabase_service_role_key)
+
+
+def _entry_admin(*, host: str, port: int) -> int:
+    """Spin up the FastAPI admin server with all stores wired."""
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+    )
+    import uvicorn
+
+    from .admin import create_app
+
+    settings = get_settings()
+    client = _make_supabase_client(settings)
+    schema = settings.supabase_schema
+
+    app = create_app(
+        admin_token=settings.admin_token,
+        subscriber_store=SupabaseSubscriberStore(client, schema=schema),
+        scrape_state_store=SupabaseScrapeStateStore(client, schema=schema),
+        keyword_store=SupabaseKeywordStore(client, schema=schema),
+        source_store=SupabaseSourceStore(client, schema=schema),
+        settings_store=SupabaseSettingsStore(client, schema=schema),
+    )
+    logger.info("admin server starting at http://%s:%d", host, port)
+    uvicorn.run(app, host=host, port=port)
+    return 0
 
 
 def seed_search_config(
