@@ -71,6 +71,13 @@ AI 트렌드를 따라가야 하는 개발자/PM 소수 (~10명). 각자 자기 
 > - Supabase Dashboard → Settings → API → "Exposed schemas" 에 `ai_news` 추가 필수
 > - **이 원칙은 ralph 가 새 테이블/마이그레이션을 추가할 때도 반드시 지켜야 한다.**
 
+> 🎛️ **검색 조건 admin 운영 원칙 (Phase F):**
+> 키워드 / 매체 / 운영 설정 (freshness / num_results / max_articles / min_body_len) 은 모두 admin 페이지에서 운영 중 변경 가능.
+> - `domains/<name>/*.yaml` 은 **seed 용** (도메인 재사용의 starting point). 첫 cron 실행 시 DB 가 비어 있으면 yaml 에서 1회 자동 import (idempotent).
+> - 그 이후는 DB 가 source of truth. yaml 변경은 DB 가 비어야 반영.
+> - `pipeline` 은 `load_search_config(stores, fallback=domain_cfg)` 로 운영 조건 결정 — DB active 가 있으면 DB, 없으면 yaml.
+> - 새 검색 조건 필드를 추가할 때는 (a) `0002_search_admin.sql` 또는 새 마이그레이션 (b) `search_config_store.SearchSettings` (c) `search_config_loader.LoadedConfig` (d) `pipeline.PipelineParams` (e) `admin.py` POST 라우트 (f) `admin.html` 폼 — 6 곳 모두 갱신.
+
 ### 7. 규모·일정·비용 cap
 
 - **목표 완성 시점**: **기한 없음** (사람을 갈아넣지 않는다).

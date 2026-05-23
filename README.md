@@ -152,15 +152,17 @@ Actions 탭 → "Daily AI News Digest" → "Run workflow" → `dry_run` 체크 O
 
 ## Admin 페이지
 
-스크래핑 ON/OFF 토글 + 구독자 추가/제거.
+5 탭으로 운영 (Phase F):
+- **Overview** — 스크래핑 ON/OFF 토글 + 전체 요약
+- **Keywords** — 검색 키워드 추가/삭제/active 토글
+- **Sources** — 매체 화이트리스트 (도메인 + 사람 친화명) 추가/삭제/active 토글
+- **Settings** — freshness / num_results_per_keyword / max_articles_for_summary / min_body_len 운영 옵션
+- **Subscribers** — 메일 명단 추가/제거
+
+`domains/<name>/*.yaml` 은 **seed 용** — DB 가 비어 있으면 cron 첫 실행 시 yaml 에서 1회 자동 import. 이후 모든 변경은 admin 에서.
 
 로컬 실행:
 ```bash
-uv run uvicorn ai_news_scraping.admin:create_app --factory \
-    --reload --port 8000 \
-    --workers 1
-# 이 명령은 인자 주입을 위해 wrapper 가 필요. 실전에서는:
-
 uv run python -c "
 import uvicorn
 from ai_news_scraping.admin import create_app
@@ -168,19 +170,27 @@ from ai_news_scraping.config import get_settings
 from supabase import create_client
 from ai_news_scraping.scrape_state_store import SupabaseScrapeStateStore
 from ai_news_scraping.subscriber_store import SupabaseSubscriberStore
+from ai_news_scraping.search_config_store import (
+    SupabaseKeywordStore, SupabaseSourceStore, SupabaseSettingsStore,
+)
 
 s = get_settings()
 client = create_client(s.supabase_url, s.supabase_service_role_key)
+schema = s.supabase_schema
 app = create_app(
     admin_token=s.admin_token,
-    subscriber_store=SupabaseSubscriberStore(client),
-    scrape_state_store=SupabaseScrapeStateStore(client),
+    subscriber_store=SupabaseSubscriberStore(client, schema=schema),
+    scrape_state_store=SupabaseScrapeStateStore(client, schema=schema),
+    keyword_store=SupabaseKeywordStore(client, schema=schema),
+    source_store=SupabaseSourceStore(client, schema=schema),
+    settings_store=SupabaseSettingsStore(client, schema=schema),
 )
 uvicorn.run(app, host='127.0.0.1', port=8000)
 "
 ```
 
 브라우저: http://127.0.0.1:8000 → username 은 임의 / password 는 `ADMIN_TOKEN`.
+URL hash 로 deep-link: `/#keywords`, `/#sources`, `/#settings`.
 
 ---
 

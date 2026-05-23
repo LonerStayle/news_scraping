@@ -52,7 +52,7 @@
 - [x] (F7) `admin.py` 설정 라우트 — `POST /settings` (freshness / num_results / max_articles / min_body_len 일괄 partial update). 폼은 `/` 통합.
 - [x] (F8) `templates/admin.html` 탭 구조로 개편 — Overview / Keywords / Sources / Settings / Subscribers 5 탭 + URL hash deep-link
 - [x] (F9) 통합 smoke test 갱신 — cli.run_command 를 통한 DB → PipelineParams 매핑 검증 + yaml fallback 검증 2 케이스
-- [ ] (F10) `CLAUDE.md` §6 / setup-guide.html §3 / README.md 운영 가이드 갱신 — admin 페이지 운영 흐름
+- [x] (F10) `CLAUDE.md` §6 + setup-guide.html §3 + README.md 운영 가이드 갱신 — admin 페이지 5탭 + 0002 마이그레이션 + seed/fallback 원칙
 
 ---
 

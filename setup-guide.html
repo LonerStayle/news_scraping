@@ -485,7 +485,7 @@
     <!-- ───────────────── 3. Supabase 마이그레이션 ───────────────── -->
     <h2 id="supabase"><span class="num">3</span>Supabase 마이그레이션 적용</h2>
 
-    <p>4개의 테이블 (<code>articles</code> / <code>subscribers</code> / <code>runs</code> / <code>scrape_enabled</code>) 을 <code>ai_news</code> schema 안에 만듭니다.</p>
+    <p>7개의 테이블 (<code>articles</code> / <code>subscribers</code> / <code>runs</code> / <code>scrape_enabled</code> / <code>search_keywords</code> / <code>search_sources</code> / <code>search_settings</code>) 을 <code>ai_news</code> schema 안에 만듭니다. 마이그레이션은 2개 (0001 = 핵심 4개, 0002 = admin 검색 조건 3개).</p>
 
     <div class="callout tip">
       <span class="label">🔒 schema 격리:</span>
@@ -497,15 +497,14 @@
     <ol class="steps">
       <li>Supabase 프로젝트 대시보드 → 좌측 메뉴 <strong>SQL Editor</strong>.</li>
       <li>우측 상단 <strong>"+ New query"</strong> 클릭.</li>
-      <li>로컬 파일 <code>supabase/migrations/0001_initial_schema.sql</code> 의 <strong>전체 내용을 복사</strong> → SQL 에디터 창에 붙여넣기.</li>
+      <li><strong>0001 적용</strong>: 로컬 <code>supabase/migrations/0001_initial_schema.sql</code> 전체를 SQL 에디터에 붙여넣기 → Run.</li>
+      <li><strong>0002 적용</strong>: <code>supabase/migrations/0002_search_admin.sql</code> 동일 절차로 적용 (search_keywords / search_sources / search_settings).</li>
       <li>우측 하단 <strong>"Run"</strong> 버튼 클릭 (또는 <kbd>⌘ + Enter</kbd>).</li>
       <li>"Success. No rows returned" 메시지 확인.</li>
-      <li>좌측 메뉴 <strong>Table Editor</strong> 클릭 → 좌상단 <strong>schema 드롭다운</strong>을 <code>public</code> 에서 <code>ai_news</code> 로 변경 → 다음 4개 테이블이 보이는지 확인:
+      <li>좌측 메뉴 <strong>Table Editor</strong> 클릭 → 좌상단 <strong>schema 드롭다운</strong>을 <code>public</code> 에서 <code>ai_news</code> 로 변경 → 다음 7개 테이블이 보이는지 확인:
         <ul>
-          <li><code>articles</code></li>
-          <li><code>subscribers</code></li>
-          <li><code>runs</code></li>
-          <li><code>scrape_enabled</code> (id=1, enabled=true 1행 자동 생성)</li>
+          <li><code>articles</code> · <code>subscribers</code> · <code>runs</code> · <code>scrape_enabled</code> (0001)</li>
+          <li><code>search_keywords</code> · <code>search_sources</code> · <code>search_settings</code> (0002, admin 운영용)</li>
         </ul>
         <div class="callout warn"><span class="label">⚠️ schema 드롭다운:</span> 처음에는 public 만 보이므로 "테이블이 없다" 고 당황할 수 있습니다. 드롭다운을 <code>ai_news</code> 로 바꾸시면 보입니다.</div>
       </li>
@@ -830,16 +829,29 @@ from ai_news_scraping.config import get_settings
 from supabase import create_client
 from ai_news_scraping.scrape_state_store import SupabaseScrapeStateStore
 from ai_news_scraping.subscriber_store import SupabaseSubscriberStore
+from ai_news_scraping.search_config_store import (
+    SupabaseKeywordStore, SupabaseSourceStore, SupabaseSettingsStore,
+)
 
 s = get_settings()
 client = create_client(s.supabase_url, s.supabase_service_role_key)
+schema = s.supabase_schema
 app = create_app(
     admin_token=s.admin_token,
-    subscriber_store=SupabaseSubscriberStore(client),
-    scrape_state_store=SupabaseScrapeStateStore(client),
+    subscriber_store=SupabaseSubscriberStore(client, schema=schema),
+    scrape_state_store=SupabaseScrapeStateStore(client, schema=schema),
+    keyword_store=SupabaseKeywordStore(client, schema=schema),
+    source_store=SupabaseSourceStore(client, schema=schema),
+    settings_store=SupabaseSettingsStore(client, schema=schema),
 )
 uvicorn.run(app, host='127.0.0.1', port=8000)
 "</pre>
+
+    <div class="callout tip">
+      <span class="label">💡 admin 페이지 5 탭:</span>
+      Overview (스크래핑 ON/OFF + 요약) · Keywords (추가/삭제/토글) · Sources (매체 도메인 + name) · Settings (freshness / num_results / max / min_body) · Subscribers (메일 명단).
+      URL 의 hash 로 deep-link 가능 — 예: <code>http://127.0.0.1:8000/#keywords</code>.
+    </div>
 
     <h3>접속</h3>
 
