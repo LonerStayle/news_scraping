@@ -33,6 +33,8 @@ class Settings(BaseSettings):
     supabase_schema: str = "ai_news"
 
     admin_token: str
+    # False 면 admin 페이지의 HTTPBasic 인증을 완전 우회. 로컬 전용일 때만.
+    admin_auth_enabled: bool = True
 
     dry_run: bool = False
     digest_tz: str = "Asia/Seoul"

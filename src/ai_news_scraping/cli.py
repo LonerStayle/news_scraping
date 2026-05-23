@@ -131,6 +131,7 @@ def _entry_admin(*, host: str, port: int) -> int:
         keyword_store=SupabaseKeywordStore(client, schema=schema),
         source_store=SupabaseSourceStore(client, schema=schema),
         settings_store=SupabaseSettingsStore(client, schema=schema),
+        auth_enabled=settings.admin_auth_enabled,
     )
     logger.info("admin server starting at http://%s:%d", host, port)
     uvicorn.run(app, host=host, port=port)

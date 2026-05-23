@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import secrets
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import Depends, FastAPI, Form, HTTPException, Request, status
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -37,21 +37,26 @@ def create_app(
     keyword_store: KeywordStore | None = None,
     source_store: SourceStore | None = None,
     settings_store: SettingsStore | None = None,
+    auth_enabled: bool = True,
     templates_dir: Path | None = None,
 ) -> FastAPI:
     app = FastAPI(title="ai_news_scraping admin")
     templates = Jinja2Templates(directory=str(templates_dir or DEFAULT_TEMPLATES_DIR))
 
-    def require_admin(credentials: _AdminCredentials) -> None:
-        # username 은 무시. password 만 constant-time 비교.
-        if not secrets.compare_digest(credentials.password, admin_token):
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="invalid admin token",
-                headers={"WWW-Authenticate": "Basic"},
-            )
+    # auth_enabled=False 면 HTTPBasic 의존성 자체를 라우트에서 빼서 팝업조차
+    # 안 뜨게 한다. 로컬 전용 (127.0.0.1 만 바인딩) 인 경우 편의용.
+    if auth_enabled:
+        def require_admin(credentials: _AdminCredentials) -> None:
+            if not secrets.compare_digest(credentials.password, admin_token):
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="invalid admin token",
+                    headers={"WWW-Authenticate": "Basic"},
+                )
 
-    auth_dep = [Depends(require_admin)]
+        auth_dep: list[Any] = [Depends(require_admin)]
+    else:
+        auth_dep = []
 
     @app.get("/", response_class=HTMLResponse, dependencies=auth_dep)
     def index(request: Request) -> HTMLResponse:
