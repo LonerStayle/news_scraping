@@ -1,114 +1,268 @@
 # ai_news_scraping
 
-ralph 하네스 (v3-classic). js-ralph factory 에서 eject 됨.
-Geoffrey Huntley 의 오리지널 Ralph Wiggum 패턴 + 대표님 호칭 톤.
+매일 아침 영어권 주요 매체의 AI 관련 기사를 자동 수집·요약·한국어로 정리해 메일로 전달하는 서비스. 사용자가 아침 출근 전 5분 안에 그날의 AI 트렌드를 따라잡을 수 있게 한다.
+
+자세한 비전은 [`CLAUDE.md`](./CLAUDE.md) 의 "비전 / 사양" 섹션 참조.
 
 ---
 
-## 사전 조건 (1회 설치)
+## 아키텍처 한눈에
 
-Claude Code 의 **ralph-loop 플러그인** 이 활성화돼 있어야 합니다.
+```
+              ┌────────────────────────────────────────┐
+              │  GitHub Actions cron (매일 23:40 UTC)   │
+              └──────────────────┬─────────────────────┘
+                                 ▼
+              ┌──────────────────────────────────────────┐
+              │  python -m ai_news_scraping.cli run      │
+              └──────────────────┬───────────────────────┘
+                                 ▼
+   ┌─────────────────────────────────────────────────────────┐
+   │ 1) search.py      Google Custom Search (3위일체 검색)   │
+   │    키워드 5 × 매체 10  →  site:(d1 OR d2 ...) 1 호출/kw │
+   │ 2) extract.py     trafilatura 본문 추출 (실패 시 skip)  │
+   │ 3) store.py       Supabase articles upsert + URL dedup  │
+   │ 4) summarize.py   Gemini → 한국어 통합 트렌드 정리      │
+   │ 5) mail.py        Gmail SMTP BCC 일괄 발송 (~10명)      │
+   └─────────────────────────────────────────────────────────┘
+
+   Admin (FastAPI 단일 HTML)
+   ──────────────────────────
+   · 자동 스크래핑 ON/OFF 토글
+   · 구독자 명단 추가/제거
+```
+
+도메인 분리 가능: `domains/<name>/keywords.yaml` + `sources.yaml` 만 갈아끼우면 다른 토픽 (예: 헬스케어, 핀테크) 에 그대로 재사용.
+
+---
+
+## 사전 준비 (API 키 5종 발급)
+
+모두 **무료 tier 안에서 운영** 가능합니다 (CLAUDE.md §6).
+
+| 항목 | 발급 위치 | 비고 |
+|------|----------|------|
+| Google Custom Search API key | https://console.cloud.google.com/ → APIs & Services → Credentials | 일 100회 무료 |
+| Google CSE 엔진 ID (cx) | https://programmablesearchengine.google.com/ | "Search the entire web" 켜기 |
+| Gemini API key | https://aistudio.google.com/app/apikey | gemini-2.5-flash 무료 |
+| Gmail 앱 비밀번호 | https://myaccount.google.com/apppasswords | 2FA 활성화 필요. 16자리 |
+| Supabase 프로젝트 | https://supabase.com/ → 프로젝트 생성 | Free tier (Postgres 500MB) |
+
+Admin 페이지용 임의 토큰:
+```bash
+openssl rand -hex 32   # 결과를 ADMIN_TOKEN 에 사용
+```
+
+---
+
+## 로컬 셋업
+
+요구: macOS / Linux, [uv](https://docs.astral.sh/uv/) >= 0.9.
 
 ```bash
-# Claude Code 안에서 한 번:
-/plugin install ralph-loop
-# 또는 plugin marketplace 카탈로그에서 'ralph-loop' 선택
+# 1) 저장소 클론 (이미 있으면 skip)
+git clone <repo-url> && cd ai_news_scraping
+
+# 2) Python 가상환경 + 의존성 (uv 가 Python 3.12 자동 설치)
+uv sync --dev
+
+# 3) 환경변수 파일
+cp .env.example .env
+# .env 의 각 키를 위에서 발급한 실제 값으로 채움
 ```
 
-설치 확인: `/help` → ralph-loop 의 슬래시 커맨드들이 보여야 합니다.
+`.env` 의 키 (자세한 설명은 `.env.example` 주석):
+```
+GOOGLE_CSE_API_KEY  GOOGLE_CSE_CX
+GEMINI_API_KEY      GEMINI_MODEL=gemini-2.5-flash
+GMAIL_USER          GMAIL_APP_PASSWORD
+SUPABASE_URL        SUPABASE_SERVICE_ROLE_KEY
+ADMIN_TOKEN
+DRY_RUN=false       DIGEST_TZ=Asia/Seoul
+```
 
 ---
 
-## 5 단계 빠른 시작
+## Supabase 마이그레이션 적용
 
-### 1) 새 Claude 세션
+`supabase/migrations/0001_initial_schema.sql` 을 적용해야 합니다.
+
+**A. Dashboard 에서 (가장 단순):**
+1. https://supabase.com/dashboard → 본 프로젝트 → SQL Editor → "New query"
+2. `supabase/migrations/0001_initial_schema.sql` 내용 복사 → 붙여넣기 → Run
+
+**B. Supabase CLI 사용:**
+```bash
+brew install supabase/tap/supabase
+supabase login
+supabase link --project-ref <your-project-ref>
+supabase db push
+```
+
+자세한 가이드: [`supabase/README.md`](./supabase/README.md).
+
+---
+
+## 로컬 dry-run
+
+검색·추출·요약까지만 수행하고 메일 발송은 skip:
+```bash
+uv run python -m ai_news_scraping.cli run --dry-run
+```
+
+로그에 `status=skipped reason=dry_run` 이 찍히고, Supabase 의 `articles` 테이블에 그날 수집한 기사가 저장됩니다. Gemini 결과 자체는 메일로 보내지 않고 로그 line 에서 확인 가능.
+
+실제 발송 (구독자 명단이 비어 있으면 skip):
+```bash
+uv run python -m ai_news_scraping.cli run
+```
+
+---
+
+## GitHub Actions 배포
+
+매일 08:40 KST (= 23:40 UTC) 자동 실행됩니다 — `.github/workflows/daily-digest.yml`.
+
+### 1) Secrets 등록
+
+저장소 **Settings → Secrets and variables → Actions → New repository secret** 으로 다음 8개 등록:
+
+```
+GOOGLE_CSE_API_KEY    GOOGLE_CSE_CX
+GEMINI_API_KEY
+GMAIL_USER            GMAIL_APP_PASSWORD
+SUPABASE_URL          SUPABASE_SERVICE_ROLE_KEY
+ADMIN_TOKEN
+```
+
+선택 — 모델 override 가 필요하면 **Variables** 에 `GEMINI_MODEL` 추가 (기본 `gemini-2.5-flash`).
+
+### 2) 수동 트리거로 1회 확인
+
+Actions 탭 → "Daily AI News Digest" → "Run workflow" → `dry_run` 체크 ON → Run.
+
+성공 후 `dry_run` OFF 로 다시 한번 실제 발송 테스트 권장.
+
+### 3) 매일 자동 실행
+
+이후는 cron 이 알아서 매일 08:40 KST ±30분 안에 발송. 노트북 안 켜져 있어도 동작합니다.
+
+> ⚠️ GitHub Actions cron 은 부하 높을 때 최대 ~15분 지연 가능 — CLAUDE.md §4 의 ±30분 허용 윈도우 안.
+
+---
+
+## Admin 페이지
+
+스크래핑 ON/OFF 토글 + 구독자 추가/제거.
+
+로컬 실행:
+```bash
+uv run uvicorn ai_news_scraping.admin:create_app --factory \
+    --reload --port 8000 \
+    --workers 1
+# 이 명령은 인자 주입을 위해 wrapper 가 필요. 실전에서는:
+
+uv run python -c "
+import uvicorn
+from ai_news_scraping.admin import create_app
+from ai_news_scraping.config import get_settings
+from supabase import create_client
+from ai_news_scraping.scrape_state_store import SupabaseScrapeStateStore
+from ai_news_scraping.subscriber_store import SupabaseSubscriberStore
+
+s = get_settings()
+client = create_client(s.supabase_url, s.supabase_service_role_key)
+app = create_app(
+    admin_token=s.admin_token,
+    subscriber_store=SupabaseSubscriberStore(client),
+    scrape_state_store=SupabaseScrapeStateStore(client),
+)
+uvicorn.run(app, host='127.0.0.1', port=8000)
+"
+```
+
+브라우저: http://127.0.0.1:8000 → username 은 임의 / password 는 `ADMIN_TOKEN`.
+
+---
+
+## 도메인 변경 (재사용)
+
+이 코드베이스는 AI 뉴스만이 아니라 **다른 도메인에도 그대로 재사용** 할 수 있게 설계됐습니다 (CLAUDE.md §3.1).
+
+새 도메인 `health_news` 추가:
+```bash
+mkdir -p domains/health_news
+cat > domains/health_news/keywords.yaml <<'EOF'
+keywords:
+  - "FDA approval"
+  - "clinical trial"
+EOF
+cat > domains/health_news/sources.yaml <<'EOF'
+sources:
+  - { domain: statnews.com,         name: STAT News }
+  - { domain: nature.com,           name: Nature }
+EOF
+
+# 실행
+uv run python -m ai_news_scraping.cli run --domain health_news --dry-run
+```
+
+---
+
+## 테스트
 
 ```bash
-cd ~/jinsup_ralph/ai_news_scraping
-claude
+uv run pytest          # 단위 + 통합 smoke
+uv run ruff check .    # lint
+uv run mypy            # typecheck
 ```
 
-ralph 가 `CLAUDE.md` 의 `onboarded: false` 를 감지하고 `vision-intake` skill (비전 인터뷰) 을 즉시 시작합니다:
-**"대표님 안녕하십니까. 8 가지 질문을 드리겠습니다."**
+전부 exit 0 이어야 ralph 가 commit 합니다 (`AGENTS.md` 참조).
 
-> ⚠️ skill 이름은 `vision-intake` 입니다 (Claude Code 빌트인 `onboarding` skill 과 충돌 회피).
+---
 
-### 2) vision-intake 8 질문 답변 → CLAUDE.md 의 "비전 / 사양" 자동 합성
-
-| 질문 | 내용 |
-|------|------|
-| 1. 비전 | 한 줄 비전 |
-| 2. 사용자 | 1~2 문장 페르소나 |
-| 3. 핵심 산출물 | 1~3 가지 |
-| 4. 성공 정의 | 정량 + 정성 |
-| 5. 금지 / 범위 밖 | |
-| 6. 외부 의존 | API / 데이터 / 입력 |
-| 7. 규모·일정·비용 cap | cycles ≤ N 등 |
-| 8. 기술 스택 override | 디폴트와 다르게 갈지 |
-
-답변 후 ralph 가 `CLAUDE.md` 의 "비전 / 사양" 섹션 8 항목을 채웁니다. 검토 후 **"확정"** 발화로 `onboarded: true` + 타임스탬프 박힙니다.
-
-### 3) `AGENTS.md` 의 검증 명령 채우기
-
-`AGENTS.md` 에 lint / typecheck / tests 명령을 도메인에 맞게 채우고 로컬에서 1회 돌려 모두 exit 0 인지 확인하세요. 이게 ralph 의 backpressure 입니다.
-
-### 4) ralph-loop 시작
+## 디렉토리 구조
 
 ```
-/ralph-loop:ralph-loop "Read PROMPT.md and follow it." --completion-promise "PROJECT_DONE" --max-iterations 150
+ai_news_scraping/
+├── .env.example               # 환경변수 키 + 발급 가이드 주석
+├── .github/workflows/
+│   └── daily-digest.yml       # 매일 23:40 UTC cron
+├── domains/
+│   └── ai_news/               # 키워드 + 매체 화이트리스트 (config)
+│       ├── keywords.yaml
+│       └── sources.yaml
+├── src/ai_news_scraping/
+│   ├── cli.py                 # python -m ai_news_scraping.cli
+│   ├── config.py              # pydantic-settings env loader
+│   ├── domain_config.py       # YAML 로더
+│   ├── search.py              # Google CSE 3위일체
+│   ├── extract.py             # trafilatura wrapper
+│   ├── store.py               # ArticleStore (Supabase + InMemory)
+│   ├── subscriber_store.py
+│   ├── scrape_state_store.py
+│   ├── summarize.py           # Gemini 한국어 통합 요약
+│   ├── mail.py                # Gmail SMTP BCC
+│   ├── pipeline.py            # end-to-end orchestration
+│   └── admin.py               # FastAPI admin
+├── supabase/migrations/
+│   └── 0001_initial_schema.sql
+├── templates/admin.html
+├── tests/                     # 130+ tests
+├── CLAUDE.md                  # 비전·사양 (동결됨)
+├── PROMPT.md                  # ralph 행동 매뉴얼
+├── IMPLEMENTATION_PLAN.md     # ralph 의 task 체크리스트
+└── AGENTS.md                  # lint/typecheck/tests 명령
 ```
 
-- 매 iteration ralph 가 fresh context 로 `CLAUDE.md` (자동 로드) + `PROMPT.md` (명령에 의해 Read) 를 입력으로 받습니다
-- PROMPT.md §1 절차 따라 `specs/`, `AGENTS.md`, `IMPLEMENTATION_PLAN.md` 읽고 한 task 진행 → 검증 → commit → 종료
-- Stop hook 이 동일 prompt 재투입
-
-### 5) PROJECT_DONE 검토 (마지막 1회)
-
-ralph 가 `PROJECT_DONE` 를 출력하고 종료하면 결과물을 직접 검토.
-
 ---
 
-## 5 파일 (Geoffrey 정석 4 + Claude Code 자동 로드 1)
+## 개발 노트
 
-| 파일 | 누가 | 무엇 |
-|------|------|------|
-| **`CLAUDE.md`** | factory + vision-intake 자동 합성 | 비전·사양 + 환경 컨텍스트 + 호칭 톤 (Claude Code 자동 로드) |
-| `PROMPT.md` | factory + 표지판 누적 | ralph 행동 매뉴얼 (도구 중립) |
-| `AGENTS.md` | 대표님 또는 ralph 첫 iteration | 빌드/검증 명령 (60줄 이하) |
-| `IMPLEMENTATION_PLAN.md` | ralph 99% 자동 | TODO 체크리스트 |
-| `specs/*.md` | (선택) 대표님 또는 ralph 첫 iteration | 도메인 추가 사양 — api/ui/data 등 |
+이 프로젝트는 **ralph harness (v3-classic)** 위에서 ralph 자율 루프로 구현됐습니다.
 
----
+- `vision-intake` skill 이 8 질문으로 비전을 수집해 `CLAUDE.md` 에 동결
+- `IMPLEMENTATION_PLAN.md` 의 Phase A~E task 를 ralph 가 매 iteration 1개씩 진행
+- 매 commit 전 `AGENTS.md` 의 lint/typecheck/pytest 모두 exit 0 게이트
 
-## 사람 개입 횟수
-
-| 시점 | 내용 | 횟수 |
-|------|------|------|
-| vision-intake (비전 인터뷰) | 8 질문 답변 | ~8 회 |
-| 동결 | "확정" 발화 → `onboarded: true` | 1 회 |
-| AGENTS.md 검증 명령 채우기 | (또는 ralph 가 채워도 됨) | 0~1 회 |
-| 표지판 추가 | ralph 가 실수 반복 시 PROMPT.md `<!-- signs -->` 아래 한 줄 | 0~N 회 |
-| PROJECT_DONE 검토 | 결과물 확인 | 1 회 |
-
----
-
-## 4 원칙 매핑
-
-자세한 설명은 `CLAUDE.md`.
-
-| 원칙 | 구현 |
-|------|------|
-| 1. 단일 prompt 자기 재투입 | ralph-loop 플러그인 (Stop hook) |
-| 2. 사람이 작성한 spec | `CLAUDE.md` 의 비전/사양 섹션 + (선택) `specs/*` |
-| 3. fresh context 매 iteration | ralph-loop 기본 동작 + CLAUDE.md 자동 로드 |
-| 4. deterministic backpressure | `AGENTS.md` 의 lint/typecheck/tests |
-
----
-
-## v2 와의 차이 (이 하네스를 처음 보시는 분께)
-
-이전 v2 는 11 phase + 14 skill + 15 페르소나 + gate-verify framework 였습니다. self-referential 함정에 빠지는 걸 막으려는 시도였지만, ralph 의 본질 (단순/멍청/지속) 을 잃었습니다.
-
-v3-classic 은 Geoffrey Huntley 의 오리지널 패턴 (4 파일 + bash loop) 으로 회귀했고, **Claude Code 의 CLAUDE.md 자동 로드를 활용해 비전을 CLAUDE.md 안에 단일 출처**로 둡니다 (Geoffrey 의 specs/vision.md 분리 모델 대비 더 단순). 호칭은 "대표님" 만 유지.
-
-자세한 회귀 결정 기록은 factory 의 `HANDOFF.md` 참조.
+ralph 동작에 관심이 있으시면 `PROMPT.md` 와 `CLAUDE.md` 의 "공통" 섹션 참조.
