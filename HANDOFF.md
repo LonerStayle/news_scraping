@@ -4,7 +4,7 @@
 
 이 문서를 위에서 아래로 한 번 읽으시면 프로젝트의 **무엇·왜·어떻게·어디** 를 다 알 수 있습니다. 다음 인계자가 첫 번째로 읽을 단일 문서.
 
-> **2026-05-25 갱신 요약**: ① admin-send-schedule 피처 완료 — admin Settings 에서 **발송 시각 (HH:MM KST) 직접 변경** 가능. GitHub Actions cron 이 매 10분 sweep (`'*/10 23,0 * * *'`) 로 변경되고 cli 시각 게이트가 ±5분 윈도우 매칭 시점만 통과 + `has_success_today` 로 중복 방지. ② 284 → 319 tests (+35). ③ 운영 셋업 가이드는 [`cron-setup-guide.html`](./cron-setup-guide.html) (멋진 다크 글래스 디자인) 에서. ④ 자세한 흐름은 §6-3, §12-B, `docs/features/2026-05-24-admin-send-schedule/` 참조.
+> **2026-05-25 갱신 요약**: ① admin-send-schedule 피처 완료 — admin Settings 에서 **발송 시각 (HH:MM KST) 직접 변경** 가능. GitHub Actions cron 이 매 5분 sweep (`'*/5 23,0 * * *'`) 로 변경되고 cli 시각 게이트가 ±2분 윈도우 매칭 시점만 통과 + `has_success_today` 로 중복 방지. ② 284 → 319 tests (+35). ③ 운영 셋업 가이드는 [`cron-setup-guide.html`](./cron-setup-guide.html) (멋진 다크 글래스 디자인) 에서. ④ 자세한 흐름은 §6-3, §12-B, `docs/features/2026-05-24-admin-send-schedule/` 참조.
 
 > **2026-05-24 갱신 요약**: ① Brave `site:` 의 path 거부 (422) 사고 → host-only 임시 안전장치 (commit `7d85e69`) → 정식 path-prefix 클라이언트 필터 (T1~T8, `0117a93..680eb1a`). admin Sources 폼에 host 또는 host/path 둘 다 입력 가능. ② 268 → 284 tests (+16). ③ 자세한 흐름은 §9-8, §12-A, `docs/features/2026-05-24-search-path-prefix/` 참조.
 
@@ -169,12 +169,12 @@ ai_news_scraping/
 
 ### 6-1. 매일 자동 발송 (대표님 손 X)
 
-1. GitHub Actions cron 이 **`*/10 23,0 * * *` UTC = KST 08:00~09:50 매 10분** 트리거 (일 12회 sweep)
+1. GitHub Actions cron 이 **`*/5 23,0 * * *` UTC = KST 08:00~09:50 매 5분** 트리거 (일 22회 sweep)
 2. workflow 가 `uv sync --frozen` → `python -m ai_news_scraping.cli run`
 3. `cli.run_command()` — 5 게이트 순차 통과:
    - **게이트 ①**: scrape_enabled OFF → skip (admin 토글)
    - **게이트 ②**: subscribers 비어 있음 → skip
-   - **게이트 ③ (NEW, admin-send-schedule)**: 현재 KST 시각이 `(send_hour, send_minute)` 의 ±5분 윈도우 밖 → skip (runs 추가 X)
+   - **게이트 ③ (NEW, admin-send-schedule)**: 현재 KST 시각이 `(send_hour, send_minute)` 의 ±2분 윈도우 밖 → skip (runs 추가 X)
    - **게이트 ④ (NEW, admin-send-schedule)**: `runs.has_success_today(now_kst)` 가 True → skip (중복 발송 차단)
    - 통과 시 `pipeline.run()` 호출
 4. `pipeline.run()`:
@@ -186,7 +186,7 @@ ai_news_scraping/
    - Gmail SMTP BCC 발송
    - `run_store.mark_finished(status=success, article_count=N, digest_text=...)`
 
-> 💡 매 10분 trigger 12회 중 1회만 진짜 발송. 나머지 11회는 outside-window 또는 already-sent-today 로 즉시 skip (DB row 추가 X). free tier 비용 ~월 360분 (cap 의 18%).
+> 💡 매 5분 trigger 12회 중 1회만 진짜 발송. 나머지 11회는 outside-window 또는 already-sent-today 로 즉시 skip (DB row 추가 X). free tier 비용 ~월 720분 (cap 의 36%).
 
 ### 6-3. 발송 시각 변경 (admin Settings)
 
@@ -378,7 +378,7 @@ CLAUDE.md §6 의 두 가지 원칙:
 | 우선순위 | 후보 | 작업량 |
 |---------|------|--------|
 | ~~🔥 ⭐⭐⭐⭐~~ ✅ **완료** | ~~매체 path-prefix 클라이언트 필터~~ — 2026-05-24 구현 완료. commits `T1~T7`. admin Sources 폼에 host 또는 host/path 둘 다 입력 가능. | — |
-| ~~🔥 ⭐⭐⭐⭐~~ ✅ **완료** | ~~admin 에서 발송 시각 변경~~ — 2026-05-25 구현 완료. commits `53f4b38..a3edf23`. admin Settings 탭에서 HH:MM KST 입력. cron 매 10분 sweep + ±5분 윈도우. | — |
+| ~~🔥 ⭐⭐⭐⭐~~ ✅ **완료** | ~~admin 에서 발송 시각 변경~~ — 2026-05-25 구현 완료. commits `53f4b38..a3edf23`. admin Settings 탭에서 HH:MM KST 입력. cron 매 5분 sweep + ±2분 윈도우. | — |
 | ⭐⭐⭐ | runs.scheduled_at 또는 trigger 종류 (cron/admin/manual) 컬럼 추가 | 1 commit |
 | ⭐⭐ | History 탭에서 특정 run 의 article 목록 보기 (drill-down) | 2~3 commit |
 | ⭐⭐ | admin 페이지에 본인 메일 즉시 발송 (test recipient) 기능 | 1 commit |
@@ -396,7 +396,7 @@ CLAUDE.md §6 의 두 가지 원칙:
 - 마이그레이션 0004 가 `search_settings` 에 두 컬럼 추가 (default 8:40)
 - `cli.run_command()` 진입 직후 시각 게이트 — `(send_hour, send_minute) ± 5분 윈도우` 매칭 시점만 통과, 아니면 즉시 return (runs 추가 X)
 - `run_store.has_success_today(now_kst)` 가 같은 KST 일자 success 존재 시 skip (중복 방지)
-- `.github/workflows/daily-digest.yml` cron 을 `'40 23 * * *'` → `'*/10 23,0 * * *'` 으로 변경 (KST 08:00~09:50 매 10분 sweep, 일 12회)
+- `.github/workflows/daily-digest.yml` cron 을 `'40 23 * * *'` → `'*/5 23,0 * * *'` 으로 변경 (KST 08:00~09:50 매 5분 sweep, 일 22회)
 - `force=True` (admin 강제발송) 와 `dry_run=True` (로컬) 는 시각 게이트 무시
 - 자세한 흐름: `docs/features/2026-05-24-admin-send-schedule/` 의 PRD (CH-001) → tech-design (CH-002) → plan (CH-003) → 구현 batch (CH-004) → 검증 (CH-005)
 
@@ -483,7 +483,7 @@ CLAUDE.md §6 의 두 가지 원칙:
 | path 매칭: segment-aware (옵션 B) | 단순 startswith 는 `/research` ↔ `/researchers` false positive. segment boundary 확인이 1줄 추가로 끝나는데 정확도 큰 차이. |
 | search() backwards compat (list[str] 도 허용) | 시그니처 변경 영향 최소화 + caller wave commit (T5) 의 fixture 마이그레이션 비용 ↓. 점진적 마이그레이션 가능. |
 | admin-send-schedule: search_settings 확장 (vs 새 send_schedule 테이블) | ALTER TABLE 2 컬럼이 새 테이블 + RLS + store 분리보다 훨씬 가벼움. CLAUDE.md §6 6곳 갱신 룰 자연스럽게. 의미 분리 약함은 컬럼 comment 로 흡수. |
-| admin-send-schedule: cron 윈도우 `*/10 23,0` (vs 하루 종일 매 10분) | 하루 종일 = 일 144회 → 월 4,320분 (free cap 2,000 초과). 비전 §4 "08:40 ±30분" 안만 sweep 으로 충분. 후속 시각 확장 필요 시 cron 표현식 추가 변경. |
+| admin-send-schedule: cron 윈도우 `*/5 23,0` (vs 하루 종일 매 5분) | 하루 종일 = 일 144회 → 월 4,320분 (free cap 2,000 초과). 비전 §4 "08:40 ±30분" 안만 sweep 으로 충분. 후속 시각 확장 필요 시 cron 표현식 추가 변경. |
 | admin-send-schedule: cli.run_command 게이트 위치 (vs pipeline.run 안) | run_store.start_run 호출 전이라 skip 시 runs 테이블 깨끗. force/dry_run bypass 분기도 깔끔. |
 | admin-send-schedule: has_success_today() DB query (vs in-memory / lock file) | cron runner 가 stateless 라 in-memory 무효. 단일 source 는 runs 테이블만. 1 SELECT/run 비용 무시 가능. |
 | admin-send-schedule: KST explicit conversion (vs server TZ 의존) | GitHub Actions runner=UTC 고정. 로컬 개발은 환경별 발산. `ZoneInfo("Asia/Seoul")` 명시로 환경 독립. |

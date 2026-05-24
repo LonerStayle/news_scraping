@@ -43,7 +43,7 @@ logger = logging.getLogger(__name__)
 PipelineRunner = Callable[[PipelineParams, PipelineDeps], PipelineResult]
 
 KST = ZoneInfo("Asia/Seoul")
-SEND_WINDOW_MINUTES = 5
+SEND_WINDOW_MINUTES = 2
 
 
 def _now_kst() -> datetime:
@@ -54,8 +54,8 @@ def _now_kst() -> datetime:
 def _is_within_send_window(send_hour: int, send_minute: int, now_kst: datetime) -> bool:
     """현재 KST 시각이 (send_hour:send_minute) ±SEND_WINDOW_MINUTES 분 안인가.
 
-    cron 이 매 10분 trigger 되므로 ±5분 윈도우면 한 매칭 시각당 1회만 진행
-    (인접 trigger 가 ±10분 이상 차이라 윈도우 겹침 X).
+    cron 이 매 5분 trigger + 윈도우 ±2분 = 한 매칭 cycle 당 정확히 1 trigger.
+    발송 시각 정확도 ±2분.
     """
     target_minutes = send_hour * 60 + send_minute
     now_minutes = now_kst.hour * 60 + now_kst.minute

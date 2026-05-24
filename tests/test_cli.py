@@ -502,7 +502,7 @@ def _make_send_window_setup(send_hour: int = 8, send_minute: int = 40):
 def test_send_schedule_outside_window_skips_pipeline(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    # send=8:40, now=9:00 (윈도우 8:35~8:45 밖) → skip
+    # send=8:40, now=9:00 (윈도우 8:38~8:42 밖) → skip
     monkeypatch.setattr(
         cli, "_now_kst",
         lambda: datetime(2026, 5, 24, 9, 0, tzinfo=cli.KST),
@@ -670,13 +670,13 @@ def test_send_schedule_dry_run_bypasses_gates(
     assert called == ["ran"]
 
 
-def test_send_schedule_window_boundary_exact_5min(
+def test_send_schedule_window_boundary_exact_2min(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    # send=8:40, now=8:45 (정확히 5분 차이, 윈도우 안) → 진행
+    # send=8:40, now=8:42 (정확히 2분 차이, 윈도우 ±2분 의 경계 안) → 진행
     monkeypatch.setattr(
         cli, "_now_kst",
-        lambda: datetime(2026, 5, 24, 8, 45, tzinfo=cli.KST),
+        lambda: datetime(2026, 5, 24, 8, 42, tzinfo=cli.KST),
     )
     sub_store, scrape_store, kw, src, settings = _make_send_window_setup()
     called: list[str] = []
@@ -700,3 +700,34 @@ def test_send_schedule_window_boundary_exact_5min(
     )
     assert rc == 0
     assert called == ["ran"]
+
+
+def test_send_schedule_just_outside_window_3min(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # send=8:40, now=8:43 (3분 차이, 윈도우 ±2분 밖) → skip
+    monkeypatch.setattr(
+        cli, "_now_kst",
+        lambda: datetime(2026, 5, 24, 8, 43, tzinfo=cli.KST),
+    )
+    sub_store, scrape_store, kw, src, settings = _make_send_window_setup()
+    called: list[str] = []
+
+    def fake_runner(p: PipelineParams, d: PipelineDeps) -> PipelineResult:
+        called.append("ran")
+        return _ok_result()
+
+    cli.run_command(
+        settings=_make_settings(),
+        domain_cfg=_make_domain(),
+        article_store=InMemoryArticleStore(),
+        sub_store=sub_store,
+        scrape_store=scrape_store,
+        keyword_store=kw,
+        source_store=src,
+        settings_store=settings,
+        run_store=InMemoryRunStore(),
+        dry_run=False,
+        pipeline_runner=fake_runner,
+    )
+    assert called == []

@@ -578,13 +578,13 @@
       <div class="meta">
         <span class="pill free">● 추가 비용 0원</span>
         <span class="pill time">⏱ 대표님 손 ~15분</span>
-        <span class="pill size">📦 GitHub Actions free tier 18%</span>
+        <span class="pill size">📦 GitHub Actions free tier 36%</span>
       </div>
     </section>
 
     <!-- ───────────────── 1. 개요 ───────────────── -->
     <h2 id="overview"><span class="num">01</span>개요 — 무엇이 바뀌는가</h2>
-    <p class="section-lead">한 줄: cron 이 매 10분 깨어나고, admin 의 시각 설정과 ±5분 매칭 시점만 진짜 발송한다.</p>
+    <p class="section-lead">한 줄: cron 이 매 5분 깨어나고, admin 의 시각 설정과 ±2분 매칭 시점만 진짜 발송한다.</p>
 
     <div class="card glow">
       <h3 style="margin-top: 0;">기존 (hardcode)</h3>
@@ -594,16 +594,16 @@
       </p>
       <h3>신규 (admin 제어)</h3>
       <p style="color: var(--fg-dim);">
-        cron 이 <code>'*/10 23,0 * * *'</code> 로 변경 — <strong>KST 08:00 ~ 09:50 사이 매 10분 깨어남 (일 12회)</strong>.
-        runner 가 admin DB 의 <code>send_hour:send_minute</code> 읽어 현재 KST 와 <strong>±5분 윈도우 매칭</strong> 시점에만
+        cron 이 <code>'*/5 23,0 * * *'</code> 로 변경 — <strong>KST 08:00 ~ 09:55 사이 매 5분 깨어남 (일 22회)</strong>.
+        runner 가 admin DB 의 <code>send_hour:send_minute</code> 읽어 현재 KST 와 <strong>±2분 윈도우 매칭</strong> 시점에만
         파이프라인 진행. 그 외 trigger 는 즉시 skip (DB row 추가 X).
       </p>
     </div>
 
     <div class="callout tip">
       <span class="label">왜 이 설계?</span>
-      workflow 파일을 GitHub API 로 동적 수정하려면 PAT 권한 + 매번 commit 발생 — 무거움. 매 10분 sweep 은 free tier 의
-      18% (월 360분) 만 사용. admin 변경은 즉시 반영 (다음 cron trigger 부터).
+      workflow 파일을 GitHub API 로 동적 수정하려면 PAT 권한 + 매번 commit 발생 — 무거움. 매 5분 sweep 은 free tier 의
+      36% (월 720분) 만 사용. admin 변경은 즉시 반영 (다음 cron trigger 부터).
     </div>
 
     <!-- ───────────────── 2. 흐름 ───────────────── -->
@@ -611,8 +611,8 @@
     <p class="section-lead">cron trigger 부터 메일 발송까지 5 게이트.</p>
 
     <div class="flow">┌─────────────────────────────────────────────────────────────────┐
-│  <span class="hl">GitHub Actions cron</span>  '*/10 23,0 * * *' UTC                  │
-│  KST 08:00, 08:10, 08:20, ..., 09:50  (일 12회 trigger)         │
+│  <span class="hl">GitHub Actions cron</span>  '*/5 23,0 * * *' UTC                  │
+│  KST 08:00, 08:05, 08:10, ..., 09:55  (일 22회 trigger)         │
 └────────────────────────────────┬────────────────────────────────┘
                                  ▼
                   ┌──────────────────────────┐
@@ -780,7 +780,7 @@ run_id=... status=success search=24 extracted=18 articles=12 accepted=10</pre>
       <li>
         <strong>메일 수신 확인</strong>
         본인 Gmail 받은편지함에 한국어 요약 메일이 도착했으면 완료.
-        매칭 시점 외 trigger 라서 outside window skip 만 나면 정상 (cron 매 10분 sweep 중 1번만 발송).
+        매칭 시점 외 trigger 라서 outside window skip 만 나면 정상 (cron 매 5분 sweep 중 1번만 발송).
       </li>
     </ol>
 
@@ -804,7 +804,7 @@ run_id=... status=success search=24 extracted=18 articles=12 accepted=10</pre>
       <ul style="color: var(--fg-dim); padding-left: 1.2rem;">
         <li><strong>hour</strong>: 0 ~ 23 (24시간 표기). 권장: KST 08~09 (cron 윈도우 안).</li>
         <li><strong>minute</strong>: 0 ~ 59.</li>
-        <li>밖에 둘 수도 있지만 cron sweep 윈도우 (08:00~09:50) 안에 없으면 발송 안 됨.</li>
+        <li>밖에 둘 수도 있지만 cron sweep 윈도우 (08:00~09:55) 안에 없으면 발송 안 됨.</li>
       </ul>
       <h3>저장 효과</h3>
       <p>
@@ -818,12 +818,12 @@ run_id=... status=success search=24 extracted=18 articles=12 accepted=10</pre>
       <li><strong>Settings 탭</strong> → 발송 시각 hour=9, minute=15 입력.</li>
       <li><strong>저장</strong> 클릭. 페이지 자동 새로고침.</li>
       <li>Overview 탭 첫 행 "<strong>발송 시각: 09:15 KST</strong>" 표시 확인.</li>
-      <li>다음 09:10 또는 09:20 cron trigger 가 윈도우 (09:10~09:20) 안이라 통과 → 메일 발송.</li>
+      <li>cron 09:15 trigger 가 윈도우 (09:13~09:17, ±2분) 의 정확 매칭이라 통과 → 메일 발송.</li>
     </ol>
 
     <div class="callout warn">
       <span class="label">⚠️ 윈도우 범위 밖</span>
-      cron 은 KST 08:00 ~ 09:50 만 sweep. 예를 들어 <code>send_hour=14</code> 로 저장하면 cron 이 14:00 에 깨지 않아 발송 X.
+      cron 은 KST 08:00 ~ 09:55 만 sweep. 예를 들어 <code>send_hour=14</code> 로 저장하면 cron 이 14:00 에 깨지 않아 발송 X.
       14시 발송이 필요하면 <code>.github/workflows/daily-digest.yml</code> 의 <code>cron</code> 값을 추가 변경 (코드 변경 필요).
     </div>
 
@@ -842,7 +842,7 @@ run_id=... status=success search=24 extracted=18 articles=12 accepted=10</pre>
       </li>
       <li>
         <strong>GitHub Actions 탭에서 skip 패턴 확인</strong>
-        Actions → Daily AI News Digest 의 최근 run 12개 (KST 08:00 ~ 09:50) 중 1개만 ✅ success,
+        Actions → Daily AI News Digest 의 최근 run 12개 (KST 08:00 ~ 09:55) 중 1개만 ✅ success,
         나머지 11개는 ✅ success 이지만 로그에 <code>outside window</code> 또는 <code>already sent today</code> skip 메시지.
         (success 처럼 보이는 이유: run_command 가 exit 0 으로 깨끗하게 종료. 실제 발송은 1회만.)
       </li>
@@ -855,23 +855,19 @@ run_id=... status=success search=24 extracted=18 articles=12 accepted=10</pre>
     <div class="timeline">
       <div class="event">
         <div class="when">08:00 KST · cron 1번째 trigger</div>
-        <div class="what">윈도우 (08:35 ~ 08:45) 밖 → skip. runs 추가 X.</div>
+        <div class="what">윈도우 (08:38 ~ 08:42, ±2분) 밖 → skip. runs 추가 X.</div>
       </div>
       <div class="event">
-        <div class="when">08:10, 08:20 KST · cron 2~3번째</div>
-        <div class="what">여전히 윈도우 밖 → skip.</div>
+        <div class="when">08:05 ~ 08:35 KST · cron 2~8번째</div>
+        <div class="what">매 5분 trigger 지만 모두 윈도우 밖 (≥3분 차이) → skip.</div>
       </div>
       <div class="event">
-        <div class="when">08:30 KST · cron 4번째</div>
-        <div class="what">여전히 5분 차이 초과 → skip.</div>
-      </div>
-      <div class="event">
-        <div class="when">08:40 KST · cron 5번째 ⭐</div>
+        <div class="when">08:40 KST · cron 9번째 ⭐</div>
         <div class="what"><strong style="color: var(--ok);">정확 매칭 → 파이프라인 진행 → 메일 발송.</strong> runs 에 success row 추가.</div>
       </div>
       <div class="event">
-        <div class="when">08:50, 09:00, ..., 09:50 KST · cron 6~12번째</div>
-        <div class="what">윈도우는 8:35~8:45 지만 has_success_today=True → skip. 중복 발송 0.</div>
+        <div class="when">08:45 ~ 09:55 KST · cron 10~22번째</div>
+        <div class="what">윈도우 밖 또는 has_success_today=True → skip. 중복 발송 0.</div>
       </div>
       <div class="event">
         <div class="when">다음날 00:00 KST</div>
@@ -886,7 +882,7 @@ run_id=... status=success search=24 extracted=18 articles=12 accepted=10</pre>
     <h3>Q1. cron 12회 모두 skip — 한 번도 발송 안 됨</h3>
     <p>가능한 원인 3가지:</p>
     <ul style="color: var(--fg-dim);">
-      <li><strong>send_hour:send_minute 가 윈도우 밖</strong> — admin Settings 에서 KST 08:00~09:50 범위 안으로 변경 (e.g. <code>8:40</code>).</li>
+      <li><strong>send_hour:send_minute 가 윈도우 밖</strong> — admin Settings 에서 KST 08:00~09:55 범위 안으로 변경 (e.g. <code>8:40</code>).</li>
       <li><strong>scrape_enabled=OFF</strong> — Overview 탭의 토글 ON 으로 변경.</li>
       <li><strong>subscribers 비어 있음</strong> — Subscribers 탭에서 최소 1명 추가.</li>
     </ul>
@@ -915,7 +911,7 @@ run_id=... status=success search=24 extracted=18 articles=12 accepted=10</pre>
     <h3>Q5. GitHub Actions 분 cap 걱정</h3>
     <p>private repo free tier 월 2,000분. 현재 설계:</p>
     <ul style="color: var(--fg-dim);">
-      <li>일 12회 trigger × ~1분/회 = <strong>월 ~360분 (18%)</strong>. 안전 마진 충분.</li>
+      <li>일 22회 trigger × ~1분/회 + 발송 ~2분/일 = <strong>월 ~720분 (36%)</strong>. 안전 마진 충분.</li>
       <li>public repo 면 무제한.</li>
     </ul>
 

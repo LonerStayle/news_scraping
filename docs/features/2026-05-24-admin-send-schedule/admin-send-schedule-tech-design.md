@@ -6,8 +6,8 @@
 
 ```
 ┌────────────────────────────────────────────────────────────────────────┐
-│  GitHub Actions cron — 변경: '*/10 23,0 * * *' UTC                     │
-│  (= KST 08:00, 08:10, ..., 09:50 — 일 12회 trigger 윈도우)             │
+│  GitHub Actions cron — 변경: '*/5 23,0 * * *' UTC                     │
+│  (= KST 08:00, 08:10, ..., 09:50 — 일 22회 trigger 윈도우)             │
 └────────────────────────────────┬───────────────────────────────────────┘
                                  ▼
                     ┌────────────────────────────────┐
@@ -36,7 +36,7 @@
 └────────────────────────────────────────────────────────────────────────┘
 ```
 
-핵심: cron trigger 빈도를 ↑ (일 1회 → 일 12회 매 10분), runner 가 admin DB 의 시각과 매칭될 때만 진행. workflow 파일 hardcode 시각 제거.
+핵심: cron trigger 빈도를 ↑ (일 1회 → 일 22회 매 5분), runner 가 admin DB 의 시각과 매칭될 때만 진행. workflow 파일 hardcode 시각 제거.
 
 ## 2. 영향 받는 컴포넌트/파일
 
@@ -49,7 +49,7 @@
 | `src/ai_news_scraping/run_store.py` | 수정 | `has_success_today(now_kst: datetime) -> bool` helper 추가. KST 자정 ~ 다음 KST 자정 안의 `status=success` 존재 여부 |
 | `src/ai_news_scraping/admin.py` | 수정 | `POST /admin/settings` 에 `send_hour` / `send_minute` 폼 필드 처리. invalid → 400. Overview 라우트는 settings 에서 표시값 가져옴 |
 | `templates/admin.html` | 수정 | Settings 탭 폼에 input 2칸 추가 (KST 명시). Overview 카드에 "오늘 발송 시각: 08:40 KST" 표시 |
-| `.github/workflows/daily-digest.yml` | 수정 | `schedule.cron` 을 `'*/10 23,0 * * *'` 으로 변경 + workflow_dispatch 유지 |
+| `.github/workflows/daily-digest.yml` | 수정 | `schedule.cron` 을 `'*/5 23,0 * * *'` 으로 변경 + workflow_dispatch 유지 |
 | `tests/test_search_config_store.py` | 추가/수정 | dataclass 확장 + validate reject 케이스 |
 | `tests/test_run_store.py` | 추가 | `has_success_today` 단위 |
 | `tests/test_cli.py` | 추가/수정 | 시각 게이트 6 케이스 (window in / out / force bypass / dry-run bypass / already sent today / valid trigger) |
@@ -65,8 +65,8 @@ alter table ai_news.search_settings
   add column send_hour smallint not null default 8 check (send_hour between 0 and 23),
   add column send_minute smallint not null default 40 check (send_minute between 0 and 59);
 
-comment on column ai_news.search_settings.send_hour is 'GitHub Actions cron 매 10분 trigger 의 매칭 대상 시각 (KST, 0-23). admin Settings 에서 변경.';
-comment on column ai_news.search_settings.send_minute is 'GitHub Actions cron 매 10분 trigger 의 매칭 대상 분 (KST, 0-59). admin Settings 에서 변경.';
+comment on column ai_news.search_settings.send_hour is 'GitHub Actions cron 매 5분 trigger 의 매칭 대상 시각 (KST, 0-23). admin Settings 에서 변경.';
+comment on column ai_news.search_settings.send_minute is 'GitHub Actions cron 매 5분 trigger 의 매칭 대상 분 (KST, 0-59). admin Settings 에서 변경.';
 ```
 
 > 마이그레이션 시점 기존 row (`id=1` 싱글톤) 의 `send_hour/send_minute` 은 DEFAULT (8, 40) 로 자동 채워짐 (기존 cron `23:40 UTC = 08:40 KST` 와 동일).
@@ -120,12 +120,12 @@ class SearchSettings:
 
 ### D3: cron 윈도우 범위 — KST 08:00~09:50 vs 하루 종일
 
-**채택**: `'*/10 23,0 * * *'` UTC (= KST 08:00~09:50, 일 12회).
+**채택**: `'*/5 23,0 * * *'` UTC (= KST 08:00~09:50, 일 22회).
 
 | 비교축 | 08:00~09:50 (채택) | 하루 종일 (*/10) |
 |--------|--------------------|-----------------|
 | 일 trigger 수 | 12회 | 144회 |
-| 월 GitHub Actions 분 | ~360분 (free 2,000 의 18%) | ~4,320분 (free 초과) |
+| 월 GitHub Actions 분 | ~360분 (free 2,000 의 36%) | ~4,320분 (free 초과) |
 | 시간 변경 유연성 | KST 08~09 안만 변경 가능 | 어느 시각이든 OK |
 | 비전 §4 (08:40 ±30분) 부합 | ✅ 09:50 까지 cover | 과도 |
 
@@ -177,7 +177,7 @@ class SearchSettings:
 | R1 | `search_config_store.SearchSettings` | breaking | frozen dataclass 에 신규 필드 추가 → 모든 인스턴스 생성처 갱신 필요 | 기본값 (8, 40) 으로 backward compat. fixture / 테스트 일괄 갱신 task 분리 |
 | R2 | `cli.run_command()` 시각 게이트 | side-effect | 잘못 저장된 send_hour=99 같은 invalid 가 게이트 통과 → 매일 skip | admin POST 양쪽 검증 (FR-1) + DB CHECK 제약. 잘못 저장 자체 차단 |
 | R3 | `runs` 테이블 query | race | 같은 10분 안 cron 2회 trigger 시 `has_success_today` race | 트랜잭션 격리 + cron 단계에서 같은 10분에 2회 trigger 매우 드물어 실용상 무시 가능. 단, AC-3 테스트로 명시 검증 |
-| R4 | cron workflow `'*/10 23,0 * * *'` | side-effect | UTC 23 = KST 08, UTC 0 = KST 09 (자정 넘어가는 분기) | cron 표현식 명시 + workflow 주석으로 KST 변환 표 박음. 검증: workflow_dispatch 로 수동 1회 |
+| R4 | cron workflow `'*/5 23,0 * * *'` | side-effect | UTC 23 = KST 08, UTC 0 = KST 09 (자정 넘어가는 분기) | cron 표현식 명시 + workflow 주석으로 KST 변환 표 박음. 검증: workflow_dispatch 로 수동 1회 |
 | R5 | admin Overview 표시 | side-effect | DB 미적용 (마이그레이션 0004 안 돔) 환경에서 컬럼 부재 → SELECT 실패 | SettingsStore.load() 가 컬럼 부재 시 fallback (기본값 8, 40) 반환. 단, 운영은 마이그레이션 적용 가정 |
 
 ## 7. 테스트 전략

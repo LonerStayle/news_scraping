@@ -118,7 +118,7 @@ def test_AC1_at_target_time_pipeline_proceeds(
 
 
 def test_AC2_outside_window_skips(monkeypatch: pytest.MonkeyPatch) -> None:
-    """AC-2: send=(9,15), now=9:00 → 윈도우 (9:10~9:20) 밖, skip, runs 추가 X."""
+    """AC-2: send=(9,15), now=9:00 → 윈도우 (9:13~9:17, ±2분) 밖, skip, runs 추가 X."""
     monkeypatch.setattr(
         cli, "_now_kst",
         lambda: datetime(2026, 5, 24, 9, 0, tzinfo=cli.KST),
@@ -287,9 +287,9 @@ def test_AC7_default_send_time_after_migration() -> None:
 # ─────────── 보너스: cli 모듈 상수 ───────────
 
 
-def test_send_window_minutes_is_5() -> None:
-    """SEND_WINDOW_MINUTES = 5 (PRD NFR-2 ±5분 윈도우)."""
-    assert cli.SEND_WINDOW_MINUTES == 5
+def test_send_window_minutes_is_2() -> None:
+    """SEND_WINDOW_MINUTES = 2 (cron 매 5분 + 윈도우 ±2분 = 1 trigger/cycle)."""
+    assert cli.SEND_WINDOW_MINUTES == 2
 
 
 def test_kst_zone_is_asia_seoul() -> None:

@@ -1,21 +1,26 @@
 name: Daily AI News Digest
 
-# KST 08:00~09:50 매 10분 trigger (= UTC 23:00~00:50).
+# KST 08:00~09:55 매 5분 trigger (= UTC 23:00~00:55).
 #
 # UTC 23,0 시각 ↔ KST 변환:
 #   - UTC 23:00 = KST 08:00 (당일)
-#   - UTC 23:50 = KST 08:50
+#   - UTC 23:55 = KST 08:55
 #   - UTC 00:00 = KST 09:00
-#   - UTC 00:50 = KST 09:50
+#   - UTC 00:55 = KST 09:55
 #
-# 매 10분 trigger 중에서 admin Settings 의 send_hour:send_minute (기본 8:40)
-# 와 ±5분 윈도우 매칭 시점에만 cli 게이트가 통과해 파이프라인 진행. 그 외
+# 매 5분 trigger 중에서 admin Settings 의 send_hour:send_minute (기본 8:40)
+# 와 ±2분 윈도우 매칭 시점에만 cli 게이트가 통과해 파이프라인 진행. 그 외
 # trigger 는 cli 의 시각 게이트가 즉시 skip (runs 추가 X).
+#
+# 매 5분 + ±2분 윈도우 = 한 cycle 에 정확히 1개 trigger 매칭 → 발송 시각
+# 정확도 ±2분. (매 10분 + ±5분 보다 정확.)
+#
+# 비용: 일 22회 × 1분 + 발송 2분/일 = 월 720분 (free 2,000 의 36%).
 #
 # 같은 날 두 번 발송 방지는 run_store.has_success_today() 가 처리.
 on:
   schedule:
-    - cron: "*/10 23,0 * * *"
+    - cron: "*/5 23,0 * * *"
   workflow_dispatch:
     inputs:
       dry_run:

@@ -497,3 +497,13 @@ git commit -m "[log] admin-send-schedule: tasks 1..7 batch entry"
 - **결과**: PASS — ruff/mypy/pytest 전부 exit 0
 - **연관 commit**: `b456013`
 - **연관 항목**: CH-20260524-004
+
+### [2026-05-25 01:30] [코드-수정] (T11: cron tuning)
+- **id**: CH-20260525-006
+- **이유**: 대표님 결정 — 발송 시각 정확도 향상. cron 매 10분 → 매 5분, SEND_WINDOW_MINUTES 5 → 2. 매 5분 + ±2분 = 한 cycle 에 1 trigger 매칭으로 정확도 ±2분 보장 (이전 ±5분).
+- **무엇이**: `.github/workflows/daily-digest.yml` (cron `*/10` → `*/5`), `src/ai_news_scraping/cli.py` (SEND_WINDOW_MINUTES = 2), `tests/test_workflow.py` (cron assertion), `tests/test_cli.py` (boundary 2min + just_outside 3min), `tests/test_send_schedule_ac.py` (SEND_WINDOW_MINUTES assertion 2), `cron-setup-guide.html` (전반 sed + 타임라인 22 trigger), PRD/tech-design 일부 (sed)
+- **영향범위**: free tier 사용량 18% → 36% (월 360분 → 720분), 정확도 ±5분 → ±2분, 일 trigger 12 → 22
+- **위험 카테고리**: side-effect (free tier 사용량 증가, 마진 64% 유지)
+- **결과**: 320 tests pass (319 → 320, +1 신규 just_outside_3min)
+- **연관 commit**: (pending)
+- **연관 항목**: CH-20260524-004
