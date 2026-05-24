@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass, field, replace
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any, Protocol
 
 VALID_STATUSES = {"running", "success", "failed", "skipped"}
@@ -43,6 +43,19 @@ class RunStore(Protocol):
     ) -> None: ...
     def list_recent(self, limit: int = 20) -> list[RunRecord]: ...
     def get_last_success(self) -> RunRecord | None: ...
+    def has_success_today(self, now_kst: datetime) -> bool: ...
+
+
+def _kst_day_bounds_utc(now_kst: datetime) -> tuple[datetime, datetime]:
+    """KST 자정 ~ 다음 KST 자정을 UTC 로 환산해 [start, end) 반환.
+
+    cli 의 시각 게이트가 "오늘 (KST 기준) success 가 이미 있는가" 를 묻기 위해
+    runs.finished_at (UTC 저장) 와 비교하는 표준 윈도우.
+    """
+    today_kst_midnight = now_kst.replace(hour=0, minute=0, second=0, microsecond=0)
+    start_utc = today_kst_midnight.astimezone(UTC)
+    end_utc = start_utc + timedelta(days=1)
+    return start_utc, end_utc
 
 
 class InMemoryRunStore:
@@ -92,6 +105,15 @@ class InMemoryRunStore:
             if r.status == "success":
                 return r
         return None
+
+    def has_success_today(self, now_kst: datetime) -> bool:
+        start_utc, end_utc = _kst_day_bounds_utc(now_kst)
+        for r in self._items.values():
+            if r.status != "success" or r.finished_at is None:
+                continue
+            if start_utc <= r.finished_at < end_utc:
+                return True
+        return False
 
 
 class SupabaseRunStore:
@@ -162,6 +184,20 @@ class SupabaseRunStore:
         if not rows:
             return None
         return _row_to_record(rows[0])
+
+    def has_success_today(self, now_kst: datetime) -> bool:
+        start_utc, end_utc = _kst_day_bounds_utc(now_kst)
+        resp = (
+            self._table()
+            .select("run_id")
+            .eq("status", "success")
+            .gte("finished_at", start_utc.isoformat())
+            .lt("finished_at", end_utc.isoformat())
+            .limit(1)
+            .execute()
+        )
+        rows = getattr(resp, "data", None) or []
+        return len(rows) > 0
 
 
 def _row_to_record(r: dict[str, Any]) -> RunRecord:

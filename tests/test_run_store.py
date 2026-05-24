@@ -118,6 +118,10 @@ class FakeQuery:
     selected: tuple[str, ...] = ()
     eq_col: str | None = None
     eq_val: Any = None
+    gte_col: str | None = None
+    gte_val: Any = None
+    lt_col: str | None = None
+    lt_val: Any = None
     ordered: tuple[str, bool] | None = None
     limited: int | None = None
     resp_data: Any = None
@@ -137,6 +141,16 @@ class FakeQuery:
     def eq(self, col: str, val: Any) -> FakeQuery:
         self.eq_col = col
         self.eq_val = val
+        return self
+
+    def gte(self, col: str, val: Any) -> FakeQuery:
+        self.gte_col = col
+        self.gte_val = val
+        return self
+
+    def lt(self, col: str, val: Any) -> FakeQuery:
+        self.lt_col = col
+        self.lt_val = val
         return self
 
     def order(self, col: str, *, desc: bool = False) -> FakeQuery:
@@ -264,3 +278,85 @@ def test_run_record_default_fields() -> None:
     assert r.article_count == 0
     assert r.finished_at is None
     assert r.error is None
+
+
+# ════════════════════ has_success_today ════════════════════
+
+from zoneinfo import ZoneInfo  # noqa: E402
+
+KST = ZoneInfo("Asia/Seoul")
+
+
+def _fixed_now_fn(fixed_kst: datetime) -> Any:
+    fixed_utc = fixed_kst.astimezone(UTC)
+    return lambda: fixed_utc
+
+
+def test_has_success_today_returns_false_when_empty() -> None:
+    s = InMemoryRunStore()
+    now_kst = datetime(2026, 5, 24, 10, 0, tzinfo=KST)
+    assert s.has_success_today(now_kst) is False
+
+
+def test_has_success_today_true_when_today_success_exists() -> None:
+    # finished_at = 2026-05-24 09:15 KST (UTC 00:15)
+    fixed_kst = datetime(2026, 5, 24, 9, 15, tzinfo=KST)
+    s = InMemoryRunStore(now_fn=_fixed_now_fn(fixed_kst))
+    r = s.start_run()
+    s.mark_finished(r.run_id, status="success", article_count=5)
+    # 같은 날 KST 의 다른 시각으로 조회
+    query_kst = datetime(2026, 5, 24, 18, 0, tzinfo=KST)
+    assert s.has_success_today(query_kst) is True
+
+
+def test_has_success_today_false_when_today_only_failed() -> None:
+    fixed_kst = datetime(2026, 5, 24, 9, 15, tzinfo=KST)
+    s = InMemoryRunStore(now_fn=_fixed_now_fn(fixed_kst))
+    r = s.start_run()
+    s.mark_finished(r.run_id, status="failed", error="boom")
+    query_kst = datetime(2026, 5, 24, 18, 0, tzinfo=KST)
+    assert s.has_success_today(query_kst) is False
+
+
+def test_has_success_today_false_when_yesterday_success() -> None:
+    # finished_at = 2026-05-23 23:30 KST (어제)
+    fixed_kst = datetime(2026, 5, 23, 23, 30, tzinfo=KST)
+    s = InMemoryRunStore(now_fn=_fixed_now_fn(fixed_kst))
+    r = s.start_run()
+    s.mark_finished(r.run_id, status="success", article_count=5)
+    # 오늘 (2026-05-24) 조회
+    query_kst = datetime(2026, 5, 24, 9, 0, tzinfo=KST)
+    assert s.has_success_today(query_kst) is False
+
+
+def test_has_success_today_kst_midnight_boundary() -> None:
+    # finished_at = 2026-05-24 00:01 KST (오늘 자정 직후)
+    fixed_kst = datetime(2026, 5, 24, 0, 1, tzinfo=KST)
+    s = InMemoryRunStore(now_fn=_fixed_now_fn(fixed_kst))
+    r = s.start_run()
+    s.mark_finished(r.run_id, status="success", article_count=5)
+    query_kst = datetime(2026, 5, 24, 9, 0, tzinfo=KST)
+    assert s.has_success_today(query_kst) is True
+    # 다음 날 조회 시 False
+    next_day_kst = datetime(2026, 5, 25, 9, 0, tzinfo=KST)
+    assert s.has_success_today(next_day_kst) is False
+
+
+def test_supabase_has_success_today_true() -> None:
+    rows = [{"run_id": "r1"}]
+    fake = FakeClient(response_queue=[rows])
+    s = SupabaseRunStore(fake)
+    now_kst = datetime(2026, 5, 24, 10, 0, tzinfo=KST)
+    assert s.has_success_today(now_kst) is True
+    q = fake.queries[0]
+    assert q.eq_col == "status" and q.eq_val == "success"
+    assert q.gte_col == "finished_at"
+    assert q.lt_col == "finished_at"
+    assert q.limited == 1
+
+
+def test_supabase_has_success_today_false() -> None:
+    fake = FakeClient(response_queue=[[]])
+    s = SupabaseRunStore(fake)
+    now_kst = datetime(2026, 5, 24, 10, 0, tzinfo=KST)
+    assert s.has_success_today(now_kst) is False
