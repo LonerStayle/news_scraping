@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ai_news_scraping — 운영 셋업 가이드 (대표님용)</title>
+<title>뉴스 스크래핑 — 운영 셋업 가이드 (대표님용)</title>
 <style>
   :root {
     --bg: #fafbfc;
@@ -286,16 +286,17 @@
 
   <main>
 
-    <h1>ai_news_scraping<br>운영 셋업 가이드</h1>
+    <h1>뉴스 스크래핑<br>운영 셋업 가이드</h1>
     <p class="subtitle">
       대표님께 — ralph 가 코드를 다 만들었습니다. 이제 외부 API 키 발급 + 실 발송 1회 + GitHub Actions cron 가동까지가 운영자(대표님) 영역입니다.
       이 문서를 위에서 아래로 순서대로 따라하시면 약 <strong>40~60분</strong> 안에 매일 아침 자동 발송이 가동됩니다.
+      <br><small style="opacity: 0.7;">폴더 / 패키지명 <code>ai_news_scraping</code> 는 첫 use case (AI 도메인) 이름. 도구 자체는 generic — 다른 주제 도메인도 운영 가능.</small>
     </p>
 
     <!-- ───────────────── 1. 개요 ───────────────── -->
     <h2 id="overview"><span class="num">1</span>개요 & 아키텍처</h2>
 
-    <p>이 서비스는 매일 아침 영어권 AI 매체를 자동 수집·요약해 한국어로 메일 전송합니다 (CLAUDE.md §1 비전).</p>
+    <p>이 도구는 매일 아침 영어권 매체의 특정 주제 기사 (default: AI) 를 자동 수집·요약해 한국어로 메일 전송합니다 (CLAUDE.md §1 비전). 키워드/매체 config 만 갈아끼우면 다른 주제도 운영 가능.</p>
 
     <div class="arch">┌───────────────────────────────────────────────────────────┐
 │  GitHub Actions cron  (매일 23:40 UTC = 08:40 KST)        │

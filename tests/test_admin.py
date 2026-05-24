@@ -71,7 +71,7 @@ def test_correct_token_returns_html(ctx: AdminCtx) -> None:
     resp = ctx.client.get("/", auth=AUTH)
     assert resp.status_code == 200
     assert "text/html" in resp.headers["content-type"]
-    assert "ai_news_scraping admin" in resp.text
+    assert "뉴스 스크래핑" in resp.text
 
 
 # ────────── Scrape toggle ──────────

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ai_news_scraping — 전체 아키텍처</title>
+<title>뉴스 스크래핑 — 전체 아키텍처</title>
 <style>
   :root {
     --bg-0: #0a0e1a;
@@ -494,9 +494,10 @@
 <body>
 
   <header class="hero">
-    <h1>ai_news_scraping</h1>
+    <h1>뉴스 스크래핑</h1>
     <p class="tag">
-      매일 아침 영어권 AI 매체에서 기사를 자동 수집하고, Gemini 로 한국어 트렌드 정리본을 만들어 메일로 전달하는 서비스.
+      매일 아침 영어권 매체에서 <strong>특정 주제 기사</strong> (현재 default: AI) 를 자동 수집하고, Gemini 로 한국어 트렌드 정리본을 만들어 메일로 전달하는 재사용 가능 도구. <code style="font-size: 0.85em;">domains/&lt;이름&gt;/</code> 추가로 다른 주제도 운영 가능.
+      <br><small style="opacity: 0.6;">폴더 / 패키지명 <code>ai_news_scraping</code> 는 첫 use case (AI 도메인) 이름.</small>
     </p>
     <div class="badges">
       <span class="badge live">production-ready</span>
