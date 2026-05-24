@@ -6,6 +6,19 @@ from typing import Any
 import pytest
 
 from ai_news_scraping import cli
+
+
+@pytest.fixture(autouse=True)
+def _patch_now_kst_to_send_window(monkeypatch: pytest.MonkeyPatch) -> None:
+    """모든 cli 테스트가 시각 게이트를 통과하도록 KST 시각을 8:40 으로 고정.
+
+    SearchSettings 기본값 (send_hour=8, send_minute=40) 과 매칭 → 시각 게이트 OK.
+    신규 시각 게이트 테스트는 본인 monkeypatch.setattr 으로 override.
+    """
+    monkeypatch.setattr(
+        cli, "_now_kst",
+        lambda: datetime(2026, 5, 24, 8, 40, tzinfo=cli.KST),
+    )
 from ai_news_scraping.config import Settings
 from ai_news_scraping.domain_config import DomainConfig, Source
 from ai_news_scraping.pipeline import PipelineDeps, PipelineParams, PipelineResult
@@ -471,3 +484,219 @@ def test_run_command_settings_dry_run_flag_overrides_cli() -> None:
     )
     assert rc == 0
     assert seen["dry_run"] is True
+
+
+# ────────── 시각 게이트 (send-schedule) ──────────
+
+
+def _make_send_window_setup(send_hour: int = 8, send_minute: int = 40):
+    """공통 setup — subscribers + scrape ON + settings 의 send_hour/send_minute."""
+    sub_store = InMemorySubscriberStore()
+    sub_store.add("x@x.com")
+    scrape_store = InMemoryScrapeStateStore(initial=True)
+    kw, src, settings = _make_search_stores()
+    settings.update(send_hour=send_hour, send_minute=send_minute)
+    return sub_store, scrape_store, kw, src, settings
+
+
+def test_send_schedule_outside_window_skips_pipeline(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # send=8:40, now=9:00 (윈도우 8:35~8:45 밖) → skip
+    monkeypatch.setattr(
+        cli, "_now_kst",
+        lambda: datetime(2026, 5, 24, 9, 0, tzinfo=cli.KST),
+    )
+    sub_store, scrape_store, kw, src, settings = _make_send_window_setup()
+    run_store = InMemoryRunStore()
+    called: list[str] = []
+
+    def fake_runner(p: PipelineParams, d: PipelineDeps) -> PipelineResult:
+        called.append("ran")
+        return _ok_result()
+
+    rc = cli.run_command(
+        settings=_make_settings(),
+        domain_cfg=_make_domain(),
+        article_store=InMemoryArticleStore(),
+        sub_store=sub_store,
+        scrape_store=scrape_store,
+        keyword_store=kw,
+        source_store=src,
+        settings_store=settings,
+        run_store=run_store,
+        dry_run=False,
+        pipeline_runner=fake_runner,
+    )
+    assert rc == 0
+    assert called == []  # pipeline 호출 X
+    # runs 추가 X — start_run 안 호출
+    assert run_store.list_recent() == []
+
+
+def test_send_schedule_inside_window_proceeds(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # send=8:40, now=8:42 (윈도우 안) → 진행
+    monkeypatch.setattr(
+        cli, "_now_kst",
+        lambda: datetime(2026, 5, 24, 8, 42, tzinfo=cli.KST),
+    )
+    sub_store, scrape_store, kw, src, settings = _make_send_window_setup()
+    run_store = InMemoryRunStore()
+    called: list[str] = []
+
+    def fake_runner(p: PipelineParams, d: PipelineDeps) -> PipelineResult:
+        called.append("ran")
+        return _ok_result()
+
+    rc = cli.run_command(
+        settings=_make_settings(),
+        domain_cfg=_make_domain(),
+        article_store=InMemoryArticleStore(),
+        sub_store=sub_store,
+        scrape_store=scrape_store,
+        keyword_store=kw,
+        source_store=src,
+        settings_store=settings,
+        run_store=run_store,
+        dry_run=False,
+        pipeline_runner=fake_runner,
+    )
+    assert rc == 0
+    assert called == ["ran"]
+
+
+def test_send_schedule_already_sent_today_skips(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # send=8:40, now=8:40 (윈도우 안) + 오늘 success 존재 → skip
+    fixed_now = datetime(2026, 5, 24, 8, 40, tzinfo=cli.KST)
+    monkeypatch.setattr(cli, "_now_kst", lambda: fixed_now)
+    sub_store, scrape_store, kw, src, settings = _make_send_window_setup()
+    # 오늘 success run 미리 박아둠 (finished_at = 같은 KST 일자 안)
+    run_store = InMemoryRunStore(
+        now_fn=lambda: datetime(2026, 5, 24, 0, 30, tzinfo=UTC),  # 09:30 KST
+    )
+    r = run_store.start_run()
+    run_store.mark_finished(r.run_id, status="success", article_count=5)
+
+    called: list[str] = []
+
+    def fake_runner(p: PipelineParams, d: PipelineDeps) -> PipelineResult:
+        called.append("ran")
+        return _ok_result()
+
+    rc = cli.run_command(
+        settings=_make_settings(),
+        domain_cfg=_make_domain(),
+        article_store=InMemoryArticleStore(),
+        sub_store=sub_store,
+        scrape_store=scrape_store,
+        keyword_store=kw,
+        source_store=src,
+        settings_store=settings,
+        run_store=run_store,
+        dry_run=False,
+        pipeline_runner=fake_runner,
+    )
+    assert rc == 0
+    assert called == []  # 중복 발송 차단
+
+
+def test_send_schedule_force_bypasses_gates(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # send=8:40, now=15:00 (윈도우 밖), force=True → 진행
+    monkeypatch.setattr(
+        cli, "_now_kst",
+        lambda: datetime(2026, 5, 24, 15, 0, tzinfo=cli.KST),
+    )
+    sub_store, scrape_store, kw, src, settings = _make_send_window_setup()
+    run_store = InMemoryRunStore()
+    called: list[str] = []
+
+    def fake_runner(p: PipelineParams, d: PipelineDeps) -> PipelineResult:
+        called.append("ran")
+        return _ok_result()
+
+    rc = cli.run_command(
+        settings=_make_settings(),
+        domain_cfg=_make_domain(),
+        article_store=InMemoryArticleStore(),
+        sub_store=sub_store,
+        scrape_store=scrape_store,
+        keyword_store=kw,
+        source_store=src,
+        settings_store=settings,
+        run_store=run_store,
+        dry_run=False,
+        force=True,
+        pipeline_runner=fake_runner,
+    )
+    assert rc == 0
+    assert called == ["ran"]  # force=True → 시각 무관 진행
+
+
+def test_send_schedule_dry_run_bypasses_gates(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # send=8:40, now=15:00 (윈도우 밖), dry_run=True → 진행
+    monkeypatch.setattr(
+        cli, "_now_kst",
+        lambda: datetime(2026, 5, 24, 15, 0, tzinfo=cli.KST),
+    )
+    sub_store, scrape_store, kw, src, settings = _make_send_window_setup()
+    called: list[str] = []
+
+    def fake_runner(p: PipelineParams, d: PipelineDeps) -> PipelineResult:
+        called.append("ran")
+        assert p.dry_run is True
+        return _ok_result()
+
+    rc = cli.run_command(
+        settings=_make_settings(),
+        domain_cfg=_make_domain(),
+        article_store=InMemoryArticleStore(),
+        sub_store=sub_store,
+        scrape_store=scrape_store,
+        keyword_store=kw,
+        source_store=src,
+        settings_store=settings,
+        dry_run=True,
+        pipeline_runner=fake_runner,
+    )
+    assert rc == 0
+    assert called == ["ran"]
+
+
+def test_send_schedule_window_boundary_exact_5min(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # send=8:40, now=8:45 (정확히 5분 차이, 윈도우 안) → 진행
+    monkeypatch.setattr(
+        cli, "_now_kst",
+        lambda: datetime(2026, 5, 24, 8, 45, tzinfo=cli.KST),
+    )
+    sub_store, scrape_store, kw, src, settings = _make_send_window_setup()
+    called: list[str] = []
+
+    def fake_runner(p: PipelineParams, d: PipelineDeps) -> PipelineResult:
+        called.append("ran")
+        return _ok_result()
+
+    rc = cli.run_command(
+        settings=_make_settings(),
+        domain_cfg=_make_domain(),
+        article_store=InMemoryArticleStore(),
+        sub_store=sub_store,
+        scrape_store=scrape_store,
+        keyword_store=kw,
+        source_store=src,
+        settings_store=settings,
+        run_store=InMemoryRunStore(),
+        dry_run=False,
+        pipeline_runner=fake_runner,
+    )
+    assert rc == 0
+    assert called == ["ran"]

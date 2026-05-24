@@ -16,7 +16,9 @@ import argparse
 import logging
 import sys
 from collections.abc import Callable, Sequence
+from datetime import datetime
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from . import pipeline as pipeline_mod
 from .config import Settings, get_settings
@@ -39,6 +41,25 @@ from .subscriber_store import SubscriberStore, SupabaseSubscriberStore
 logger = logging.getLogger(__name__)
 
 PipelineRunner = Callable[[PipelineParams, PipelineDeps], PipelineResult]
+
+KST = ZoneInfo("Asia/Seoul")
+SEND_WINDOW_MINUTES = 5
+
+
+def _now_kst() -> datetime:
+    """현재 KST 시각 — 시각 게이트의 단일 시간 source. 테스트는 monkeypatch 로 교체."""
+    return datetime.now(KST)
+
+
+def _is_within_send_window(send_hour: int, send_minute: int, now_kst: datetime) -> bool:
+    """현재 KST 시각이 (send_hour:send_minute) ±SEND_WINDOW_MINUTES 분 안인가.
+
+    cron 이 매 10분 trigger 되므로 ±5분 윈도우면 한 매칭 시각당 1회만 진행
+    (인접 trigger 가 ±10분 이상 차이라 윈도우 겹침 X).
+    """
+    target_minutes = send_hour * 60 + send_minute
+    now_minutes = now_kst.hour * 60 + now_kst.minute
+    return abs(now_minutes - target_minutes) <= SEND_WINDOW_MINUTES
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -216,6 +237,30 @@ def run_command(
         logger.warning("no active subscribers, skipping mail send")
         return 0
 
+    loaded = load_search_config(
+        keyword_store, source_store, settings_store, fallback=domain_cfg,
+    )
+
+    # 시각 게이트 — cron 자동 실행 (force=False, dry_run=False) 만 적용.
+    # admin "강제발송" 버튼 (force=True) 과 로컬 dry-run 은 무시 (운영 정책).
+    if not force and not effective_dry_run:
+        now_kst = _now_kst()
+        if not _is_within_send_window(
+            loaded.settings.send_hour, loaded.settings.send_minute, now_kst
+        ):
+            logger.info(
+                "send-schedule gate: outside window (target=%02d:%02d KST, now=%s KST), skipping",
+                loaded.settings.send_hour,
+                loaded.settings.send_minute,
+                now_kst.strftime("%H:%M"),
+            )
+            return 0
+        if run_store is not None and run_store.has_success_today(now_kst):
+            logger.info(
+                "send-schedule gate: already sent today (KST), skipping"
+            )
+            return 0
+
     # force=True: 직전 success run 의 article 삭제 후 새 run 시작.
     # 동일 기사 dedup 우회용 — admin "강제발송" 버튼이 사용.
     if force and run_store is not None:
@@ -228,10 +273,6 @@ def run_command(
             )
         else:
             logger.info("force: no previous success run — nothing to delete")
-
-    loaded = load_search_config(
-        keyword_store, source_store, settings_store, fallback=domain_cfg,
-    )
 
     params = build_params(
         settings=settings,
