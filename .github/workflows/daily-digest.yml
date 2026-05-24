@@ -1,10 +1,21 @@
 name: Daily AI News Digest
 
-# 매일 08:40 KST (= 전날 23:40 UTC) + 수동 트리거.
-# GitHub Actions cron 은 정시 ± 최대 15분 지연 가능 — 발송 윈도우 (±30분) 안.
+# KST 08:00~09:50 매 10분 trigger (= UTC 23:00~00:50).
+#
+# UTC 23,0 시각 ↔ KST 변환:
+#   - UTC 23:00 = KST 08:00 (당일)
+#   - UTC 23:50 = KST 08:50
+#   - UTC 00:00 = KST 09:00
+#   - UTC 00:50 = KST 09:50
+#
+# 매 10분 trigger 중에서 admin Settings 의 send_hour:send_minute (기본 8:40)
+# 와 ±5분 윈도우 매칭 시점에만 cli 게이트가 통과해 파이프라인 진행. 그 외
+# trigger 는 cli 의 시각 게이트가 즉시 skip (runs 추가 X).
+#
+# 같은 날 두 번 발송 방지는 run_store.has_success_today() 가 처리.
 on:
   schedule:
-    - cron: "40 23 * * *"
+    - cron: "*/10 23,0 * * *"
   workflow_dispatch:
     inputs:
       dry_run:
