@@ -108,7 +108,6 @@ def test_in_memory_source_invalid() -> None:
 @pytest.mark.parametrize(
     "bad_domain",
     [
-        "openai.com/research",  # path
         "https://openai.com",  # scheme
         "openai.com:443",  # port
         "openai.com?q=1",  # query
@@ -118,17 +117,44 @@ def test_in_memory_source_invalid() -> None:
     ],
 )
 def test_in_memory_source_rejects_non_host_input(bad_domain: str) -> None:
-    """Brave site: 연산자가 path/scheme/port/query 를 거부 → 입력 단에서 reject."""
+    """Brave site: 가 받지 못하는 형태 (scheme/port/query/공백/no-dot/trailing-slash)
+    는 입력 단에서 reject. path 는 허용 (별 테스트)."""
     s = InMemorySourceStore()
     with pytest.raises(ValueError):
         s.add(bad_domain, "X")
 
 
-def test_in_memory_source_update_rejects_path() -> None:
+def test_normalize_domain_allows_host_with_path() -> None:
+    from ai_news_scraping.search_config_store import _normalize_domain
+    assert _normalize_domain("openai.com/research") == "openai.com/research"
+    assert _normalize_domain("openai.com/research/papers") == "openai.com/research/papers"
+    assert _normalize_domain("www.OpenAI.com/News") == "openai.com/news"
+
+
+def test_normalize_domain_still_rejects_non_path_garbage() -> None:
+    from ai_news_scraping.search_config_store import _normalize_domain
+    for bad in ["https://openai.com", "openai.com:443", "openai.com?q=1",
+                "open ai.com", "openai", "openai.com/"]:
+        with pytest.raises(ValueError):
+            _normalize_domain(bad)
+
+
+def test_split_host_path_separates() -> None:
+    from ai_news_scraping.search_config_store import _split_host_path
+    assert _split_host_path("openai.com") == ("openai.com", "")
+    assert _split_host_path("openai.com/research") == ("openai.com", "/research")
+    assert _split_host_path("openai.com/research/papers/2026") == (
+        "openai.com", "/research/papers/2026"
+    )
+
+
+def test_in_memory_source_update_allows_path() -> None:
+    """T1 이후 path 는 허용 (기존 reject 정책 해제)."""
     s = InMemorySourceStore()
     r = s.add("a.com", "A")
-    with pytest.raises(ValueError):
-        s.update(r.id, domain="a.com/news")
+    updated = s.update(r.id, domain="a.com/news")
+    assert updated is not None
+    assert updated.domain == "a.com/news"
 
 
 def test_in_memory_source_bulk_seed() -> None:
@@ -138,11 +164,12 @@ def test_in_memory_source_bulk_seed() -> None:
 
 
 def test_in_memory_source_bulk_seed_skips_bad_hosts() -> None:
-    """seed (yaml 자동 import) 에 잘못된 host 가 섞여 있으면 그 항목만 skip — 전체 실패 X."""
+    """seed (yaml 자동 import) 에 잘못된 host 가 섞여 있으면 그 항목만 skip — 전체 실패 X.
+    path 는 valid 라 skip 되지 않음. scheme/공백 같은 진짜 잘못된 형태만 skip."""
     s = InMemorySourceStore()
     n = s.bulk_seed([
         ("a.com", "A"),
-        ("openai.com/research", "Bad"),  # skipped
+        ("https://openai.com", "Bad"),  # scheme → skipped
         ("b.com", "B"),
     ])
     assert n == 2

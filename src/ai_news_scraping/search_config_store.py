@@ -37,12 +37,18 @@ class SearchSettings:
 
 
 def _normalize_domain(raw: str) -> str:
-    """대표님이 admin Sources 에 매체 주소를 넣을 때 받을 수 있는 형식을 host 만으로 정규화.
+    """admin Sources 의 매체 입력 정규화 — host 또는 host/path prefix 둘 다 허용.
 
-    허용: ``openai.com``, ``www.openai.com``, ``OpenAI.com``
-    거부 (ValueError): ``openai.com/research``, ``https://openai.com``,
-    ``openai.com?q=1``, ``openai.com:443`` — Brave Search 의 ``site:`` 연산자가
-    경로/스킴/쿼리/포트를 받지 못해 422 를 반환하기 때문 (실제 운영 사고 사례).
+    허용 형태:
+      - host only:        ``openai.com`` / ``www.openai.com`` / ``OpenAI.com``
+      - host + prefix:    ``openai.com/research`` / ``openai.com/research/papers``
+
+    여전히 reject (ValueError) — Brave ``site:`` 가 받지 못하는 형태:
+      - scheme:  ``https://openai.com``
+      - port:    ``openai.com:443``
+      - query:   ``openai.com?q=1`` / fragment: ``openai.com#x``
+      - 공백, host 부분의 점 누락, host 부분 비영문/숫자/하이픈/점
+      - trailing slash ``openai.com/`` (의도 모호 — host 인지 빈 prefix 인지)
 
     실수로 URL 통째로 붙여 넣어도 자동 정규화 X — 명시 reject 로 디버깅을 쉽게.
     """
@@ -50,17 +56,34 @@ def _normalize_domain(raw: str) -> str:
     if not s:
         raise ValueError(f"domain must be non-empty: {raw!r}")
     s = s.removeprefix("www.")
-    # path / scheme / query / fragment / port — 전부 거부 (자동 잘라내기 X).
-    for bad_ch in ("/", ":", "?", "#", " "):
+    # scheme / port / query / fragment / 공백 — 여전히 거부. path 는 허용.
+    for bad_ch in (":", "?", "#", " "):
         if bad_ch in s:
             raise ValueError(
-                f"domain must be host only (no path/scheme/port/query): {raw!r}. "
-                "예) openai.com"
+                f"domain must be host or host/path (no scheme/port/query): {raw!r}. "
+                "예) openai.com 또는 openai.com/research"
             )
-    # 최소한의 host 모양 검증 — 점 1개 이상 + 영문/숫자/하이픈/점만.
-    if "." not in s or not all(c.isalnum() or c in "-." for c in s):
+    if s.endswith("/"):
+        raise ValueError(f"trailing slash not allowed: {raw!r}")
+    host, path = _split_host_path(s)
+    # host 부분 검증: 점 1개 이상 + 영문/숫자/하이픈/점.
+    if "." not in host or not all(c.isalnum() or c in "-." for c in host):
         raise ValueError(f"invalid host format: {raw!r}. 예) openai.com")
+    # path 부분 검증: 영문/숫자/하이픈/언더스코어/점/슬래시만.
+    if path and not all(c.isalnum() or c in "-._/" for c in path):
+        raise ValueError(f"invalid path format: {raw!r}")
     return s
+
+
+def _split_host_path(domain: str) -> tuple[str, str]:
+    """``'openai.com/research'`` → ``('openai.com', '/research')``.
+
+    ``'openai.com'`` → ``('openai.com', '')``.
+    """
+    if "/" not in domain:
+        return domain, ""
+    host, rest = domain.split("/", 1)
+    return host, "/" + rest
 
 
 # ════════════════════════════ KeywordStore ════════════════════════════
