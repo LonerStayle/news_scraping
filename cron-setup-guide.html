@@ -1,0 +1,952 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ai_news_scraping — cron 자동 발송 + admin 시각 설정 가이드</title>
+<style>
+  :root {
+    --bg-0: #07080c;
+    --bg-1: #0b0d14;
+    --bg-2: #11141d;
+    --bg-3: #161a25;
+    --line: rgba(255, 255, 255, 0.08);
+    --line-strong: rgba(255, 255, 255, 0.16);
+    --fg: #e6e7eb;
+    --fg-dim: #a4a8b5;
+    --fg-muted: #6b6f7d;
+    --accent: #7c5cff;
+    --accent-2: #00d4ff;
+    --accent-glow: rgba(124, 92, 255, 0.4);
+    --warn: #ffb547;
+    --warn-bg: rgba(255, 181, 71, 0.08);
+    --warn-border: rgba(255, 181, 71, 0.35);
+    --danger: #ff5d6c;
+    --danger-bg: rgba(255, 93, 108, 0.08);
+    --danger-border: rgba(255, 93, 108, 0.35);
+    --ok: #4ade80;
+    --ok-bg: rgba(74, 222, 128, 0.08);
+    --ok-border: rgba(74, 222, 128, 0.35);
+    --code-bg: #050608;
+    --code-fg: #d4d8e0;
+    --code-string: #98e0ad;
+    --code-keyword: #c39dff;
+    --code-comment: #5a5e6b;
+    --code-num: #ffb547;
+  }
+
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; scroll-padding-top: 1rem; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo",
+                 "Pretendard", "Segoe UI", "Noto Sans KR", Roboto, sans-serif;
+    line-height: 1.7;
+    color: var(--fg);
+    background: var(--bg-0);
+    margin: 0;
+    padding: 0;
+    overflow-x: hidden;
+  }
+
+  /* 배경 글로우 — fixed, 페이지 어디서나 보이게 */
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    background:
+      radial-gradient(900px 700px at 12% -10%, rgba(124, 92, 255, 0.22), transparent 50%),
+      radial-gradient(800px 600px at 110% 20%, rgba(0, 212, 255, 0.16), transparent 50%),
+      radial-gradient(700px 500px at 50% 130%, rgba(124, 92, 255, 0.18), transparent 50%);
+    pointer-events: none;
+    z-index: -1;
+  }
+
+  .layout {
+    display: grid;
+    grid-template-columns: 280px 1fr;
+    max-width: 1280px;
+    margin: 0 auto;
+    min-height: 100vh;
+  }
+
+  /* ───── 좌측 nav ───── */
+  nav.toc {
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    overflow-y: auto;
+    padding: 2rem 1.4rem 2rem 2rem;
+    border-right: 1px solid var(--line);
+    background: linear-gradient(180deg, rgba(11, 13, 20, 0.85) 0%, rgba(7, 8, 12, 0.95) 100%);
+    backdrop-filter: blur(20px);
+    font-size: 0.875rem;
+  }
+  nav.toc .brand {
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--fg-muted);
+    margin-bottom: 0.4rem;
+  }
+  nav.toc h2 {
+    font-size: 0.95rem;
+    color: var(--fg);
+    margin: 0 0 1.2rem;
+    font-weight: 700;
+    background: linear-gradient(135deg, var(--accent) 0%, var(--accent-2) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  nav.toc ol {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    counter-reset: tocstep;
+  }
+  nav.toc li {
+    margin: 0.25rem 0;
+    counter-increment: tocstep;
+  }
+  nav.toc a {
+    color: var(--fg-dim);
+    text-decoration: none;
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    padding: 0.4rem 0.6rem;
+    border-radius: 6px;
+    transition: all 0.15s ease;
+    line-height: 1.4;
+  }
+  nav.toc a::before {
+    content: counter(tocstep);
+    width: 1.6rem;
+    height: 1.6rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg-2);
+    border: 1px solid var(--line);
+    border-radius: 50%;
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: var(--fg-muted);
+    flex-shrink: 0;
+    transition: all 0.15s ease;
+  }
+  nav.toc a:hover {
+    color: var(--fg);
+    background: rgba(124, 92, 255, 0.08);
+  }
+  nav.toc a:hover::before {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: white;
+    box-shadow: 0 0 14px var(--accent-glow);
+  }
+
+  /* ───── main ───── */
+  main {
+    padding: 3rem 3.5rem 8rem;
+    max-width: 920px;
+  }
+
+  .hero {
+    margin-bottom: 4rem;
+  }
+  .hero .eyebrow {
+    display: inline-block;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--accent);
+    padding: 0.3rem 0.9rem;
+    background: rgba(124, 92, 255, 0.1);
+    border: 1px solid var(--line-strong);
+    border-radius: 999px;
+    margin-bottom: 1.2rem;
+  }
+  h1 {
+    font-size: 2.6rem;
+    font-weight: 800;
+    line-height: 1.15;
+    margin: 0 0 1rem;
+    letter-spacing: -0.02em;
+    background: linear-gradient(135deg, #ffffff 0%, var(--accent) 70%, var(--accent-2) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .hero .lead {
+    font-size: 1.1rem;
+    color: var(--fg-dim);
+    line-height: 1.7;
+    margin: 0 0 2rem;
+    max-width: 720px;
+  }
+  .hero .meta {
+    display: flex;
+    gap: 0.6rem;
+    flex-wrap: wrap;
+    margin-top: 1.5rem;
+  }
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.78rem;
+    font-weight: 600;
+    padding: 0.32rem 0.75rem;
+    border-radius: 999px;
+    background: var(--bg-2);
+    border: 1px solid var(--line);
+    color: var(--fg-dim);
+  }
+  .pill.free { color: var(--ok); border-color: var(--ok-border); }
+  .pill.time { color: var(--accent-2); border-color: rgba(0, 212, 255, 0.3); }
+  .pill.size { color: var(--warn); border-color: var(--warn-border); }
+
+  h2 {
+    font-size: 1.7rem;
+    font-weight: 700;
+    margin: 4.5rem 0 0.8rem;
+    letter-spacing: -0.015em;
+    color: var(--fg);
+    display: flex;
+    align-items: baseline;
+    gap: 0.8rem;
+  }
+  h2 .num {
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: 0.95rem;
+    color: var(--accent);
+    font-weight: 700;
+    padding: 0.15rem 0.5rem;
+    background: rgba(124, 92, 255, 0.12);
+    border: 1px solid var(--line-strong);
+    border-radius: 6px;
+    letter-spacing: 0.05em;
+  }
+  h2 + .section-lead {
+    color: var(--fg-dim);
+    margin: 0 0 1.5rem;
+    font-size: 1rem;
+  }
+  h3 {
+    font-size: 1.15rem;
+    font-weight: 700;
+    margin: 2rem 0 0.6rem;
+    color: var(--fg);
+  }
+  h4 {
+    font-size: 0.92rem;
+    font-weight: 700;
+    margin: 1.3rem 0 0.4rem;
+    color: var(--fg-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+
+  p { margin: 0.6rem 0; }
+  strong { color: var(--fg); font-weight: 700; }
+
+  /* ───── card / callout ───── */
+  .card {
+    background: linear-gradient(180deg, rgba(22, 26, 37, 0.7) 0%, rgba(17, 20, 29, 0.7) 100%);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 1.3rem 1.5rem;
+    margin: 1.2rem 0;
+    backdrop-filter: blur(8px);
+  }
+  .card.glow {
+    border-color: rgba(124, 92, 255, 0.4);
+    box-shadow: 0 0 24px rgba(124, 92, 255, 0.12), inset 0 0 32px rgba(124, 92, 255, 0.04);
+  }
+
+  .callout {
+    padding: 1rem 1.2rem;
+    margin: 1rem 0;
+    border-radius: 10px;
+    border-left: 3px solid var(--line-strong);
+    background: var(--bg-2);
+  }
+  .callout .label {
+    display: inline-block;
+    font-weight: 700;
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-right: 0.5rem;
+  }
+  .callout.warn   { background: var(--warn-bg);   border-color: var(--warn-border);   color: var(--fg); }
+  .callout.danger { background: var(--danger-bg); border-color: var(--danger-border); color: var(--fg); }
+  .callout.ok     { background: var(--ok-bg);     border-color: var(--ok-border);     color: var(--fg); }
+  .callout.tip    { background: rgba(124, 92, 255, 0.08); border-color: var(--accent); color: var(--fg); }
+  .callout.warn   .label { color: var(--warn); }
+  .callout.danger .label { color: var(--danger); }
+  .callout.ok     .label { color: var(--ok); }
+  .callout.tip    .label { color: var(--accent); }
+
+  /* ───── code ───── */
+  pre, code {
+    font-family: "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+  }
+  pre {
+    background: var(--code-bg);
+    color: var(--code-fg);
+    padding: 1rem 1.25rem;
+    border-radius: 10px;
+    overflow-x: auto;
+    font-size: 0.85rem;
+    line-height: 1.65;
+    border: 1px solid var(--line);
+    margin: 0.8rem 0;
+  }
+  pre .c { color: var(--code-comment); }
+  pre .k { color: var(--code-keyword); font-weight: 600; }
+  pre .s { color: var(--code-string); }
+  pre .n { color: var(--code-num); }
+  code:not(pre code) {
+    background: var(--bg-3);
+    color: var(--accent-2);
+    padding: 0.12em 0.45em;
+    border-radius: 5px;
+    font-size: 0.86em;
+    border: 1px solid var(--line);
+  }
+
+  /* ───── steps ───── */
+  ol.steps {
+    counter-reset: step;
+    list-style: none;
+    padding: 0;
+    margin: 1.5rem 0;
+  }
+  ol.steps > li {
+    counter-increment: step;
+    position: relative;
+    padding-left: 3.2rem;
+    margin-bottom: 1.8rem;
+    min-height: 2rem;
+  }
+  ol.steps > li::before {
+    content: counter(step);
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 2.2rem;
+    height: 2.2rem;
+    line-height: 2.2rem;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--accent) 0%, var(--accent-2) 100%);
+    color: white;
+    text-align: center;
+    font-weight: 700;
+    font-size: 0.95rem;
+    box-shadow: 0 0 0 1px rgba(124, 92, 255, 0.3), 0 4px 20px rgba(124, 92, 255, 0.25);
+  }
+  ol.steps > li > strong:first-child {
+    display: block;
+    color: var(--fg);
+    font-size: 1.02rem;
+    margin-bottom: 0.4rem;
+  }
+
+  /* ───── table ───── */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1rem 0;
+    font-size: 0.92rem;
+    background: var(--bg-2);
+    border-radius: 10px;
+    overflow: hidden;
+    border: 1px solid var(--line);
+  }
+  th, td {
+    padding: 0.7rem 0.9rem;
+    border-bottom: 1px solid var(--line);
+    text-align: left;
+    vertical-align: top;
+  }
+  th {
+    background: rgba(124, 92, 255, 0.08);
+    font-weight: 700;
+    color: var(--fg);
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  tr:last-child td { border-bottom: 0; }
+  tr:hover td { background: rgba(255, 255, 255, 0.02); }
+
+  /* ───── secrets grid ───── */
+  .secrets {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 0.8rem;
+    margin: 1.2rem 0;
+  }
+  .secret {
+    background: var(--bg-2);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 0.9rem 1rem;
+    transition: all 0.2s ease;
+  }
+  .secret:hover {
+    border-color: var(--accent);
+    box-shadow: 0 0 16px rgba(124, 92, 255, 0.15);
+    transform: translateY(-1px);
+  }
+  .secret .name {
+    font-family: "SF Mono", monospace;
+    font-size: 0.82rem;
+    color: var(--accent-2);
+    font-weight: 700;
+    margin-bottom: 0.3rem;
+  }
+  .secret .desc {
+    font-size: 0.82rem;
+    color: var(--fg-dim);
+    line-height: 1.5;
+  }
+  .secret .src {
+    font-size: 0.7rem;
+    color: var(--fg-muted);
+    margin-top: 0.4rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  /* ───── flow diagram (text-based) ───── */
+  .flow {
+    background: var(--code-bg);
+    color: var(--code-fg);
+    padding: 1.4rem 1.6rem;
+    border-radius: 12px;
+    border: 1px solid var(--line);
+    font-family: "SF Mono", monospace;
+    font-size: 0.82rem;
+    line-height: 1.65;
+    white-space: pre;
+    overflow-x: auto;
+    margin: 1.2rem 0;
+    position: relative;
+  }
+  .flow::after {
+    content: "FLOW";
+    position: absolute;
+    top: 0.5rem;
+    right: 0.8rem;
+    font-size: 0.6rem;
+    font-weight: 700;
+    letter-spacing: 0.15em;
+    color: var(--fg-muted);
+  }
+  .flow .hl { color: var(--accent-2); font-weight: 700; }
+  .flow .em { color: var(--accent); font-weight: 700; }
+  .flow .ok { color: var(--ok); }
+  .flow .warn { color: var(--warn); }
+
+  /* ───── timeline ───── */
+  .timeline {
+    position: relative;
+    padding-left: 2rem;
+    margin: 1.5rem 0;
+  }
+  .timeline::before {
+    content: "";
+    position: absolute;
+    left: 0.6rem;
+    top: 0.2rem;
+    bottom: 0.2rem;
+    width: 2px;
+    background: linear-gradient(180deg, var(--accent) 0%, var(--accent-2) 100%);
+    border-radius: 2px;
+  }
+  .timeline .event {
+    position: relative;
+    margin-bottom: 1.4rem;
+  }
+  .timeline .event::before {
+    content: "";
+    position: absolute;
+    left: -1.7rem;
+    top: 0.5rem;
+    width: 0.7rem;
+    height: 0.7rem;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 0 3px var(--bg-0), 0 0 0 4px var(--accent);
+  }
+  .timeline .when {
+    font-family: "SF Mono", monospace;
+    font-size: 0.78rem;
+    color: var(--accent-2);
+    font-weight: 700;
+    margin-bottom: 0.2rem;
+  }
+  .timeline .what { color: var(--fg-dim); font-size: 0.95rem; }
+
+  /* ───── checklist ───── */
+  .check {
+    background: var(--ok-bg);
+    border: 1px solid var(--ok-border);
+    padding: 1.2rem 1.4rem;
+    border-radius: 12px;
+    margin: 1.5rem 0;
+  }
+  .check h4 {
+    margin: 0 0 0.8rem;
+    color: var(--ok);
+    text-transform: none;
+    letter-spacing: 0;
+    font-size: 0.95rem;
+  }
+  .check ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+  .check li {
+    padding-left: 1.7rem;
+    margin-bottom: 0.4rem;
+    position: relative;
+    color: var(--fg);
+  }
+  .check li::before {
+    content: "✓";
+    position: absolute;
+    left: 0;
+    top: 0;
+    color: var(--ok);
+    font-weight: 700;
+    font-size: 1.05rem;
+  }
+
+  /* ───── responsive ───── */
+  @media (max-width: 960px) {
+    .layout { grid-template-columns: 1fr; }
+    nav.toc {
+      position: static;
+      height: auto;
+      border-right: 0;
+      border-bottom: 1px solid var(--line);
+    }
+    main { padding: 2rem 1.4rem 4rem; }
+    h1 { font-size: 1.9rem; }
+    h2 { font-size: 1.4rem; }
+  }
+</style>
+</head>
+<body>
+<div class="layout">
+
+  <nav class="toc">
+    <div class="brand">ai_news_scraping</div>
+    <h2>cron + admin 시각 설정</h2>
+    <ol>
+      <li><a href="#overview">개요 — 무엇이 바뀌는가</a></li>
+      <li><a href="#flow">동작 흐름</a></li>
+      <li><a href="#secrets">GitHub Secrets 8개 등록</a></li>
+      <li><a href="#migrate">Supabase 마이그레이션 0004</a></li>
+      <li><a href="#trigger">수동 트리거 1회</a></li>
+      <li><a href="#admin">admin 에서 시각 변경</a></li>
+      <li><a href="#verify">cron 자동 동작 확인</a></li>
+      <li><a href="#timeline">하루 타임라인 (참고)</a></li>
+      <li><a href="#faq">트러블슈팅</a></li>
+      <li><a href="#checklist">최종 체크리스트</a></li>
+    </ol>
+  </nav>
+
+  <main>
+
+    <section class="hero">
+      <span class="eyebrow">SETUP GUIDE · 2026-05-24</span>
+      <h1>cron 자동 발송<br>+ admin 시각 설정</h1>
+      <p class="lead">
+        GitHub Actions cron 을 워크플로 파일 hardcode 시각 (23:40 UTC) 에서 해방시키고
+        <strong> admin Settings 에서 발송 시각 (HH:MM KST) 을 직접 설정</strong> 가능하게 만든 피처입니다.
+        이 가이드는 대표님이 손수 해야 하는 3단계 (secrets 등록 → 마이그레이션 → 첫 트리거) 와
+        운영 중 시각 변경 방법을 담고 있습니다.
+      </p>
+      <div class="meta">
+        <span class="pill free">● 추가 비용 0원</span>
+        <span class="pill time">⏱ 대표님 손 ~15분</span>
+        <span class="pill size">📦 GitHub Actions free tier 18%</span>
+      </div>
+    </section>
+
+    <!-- ───────────────── 1. 개요 ───────────────── -->
+    <h2 id="overview"><span class="num">01</span>개요 — 무엇이 바뀌는가</h2>
+    <p class="section-lead">한 줄: cron 이 매 10분 깨어나고, admin 의 시각 설정과 ±5분 매칭 시점만 진짜 발송한다.</p>
+
+    <div class="card glow">
+      <h3 style="margin-top: 0;">기존 (hardcode)</h3>
+      <p style="color: var(--fg-dim);">
+        <code>.github/workflows/daily-digest.yml</code> 의 <code>cron: "40 23 * * *"</code> 가 매일
+        <strong>UTC 23:40 = KST 08:40 단 1회</strong> trigger. 발송 시각 변경 = workflow 파일 수정 + git commit + push.
+      </p>
+      <h3>신규 (admin 제어)</h3>
+      <p style="color: var(--fg-dim);">
+        cron 이 <code>'*/10 23,0 * * *'</code> 로 변경 — <strong>KST 08:00 ~ 09:50 사이 매 10분 깨어남 (일 12회)</strong>.
+        runner 가 admin DB 의 <code>send_hour:send_minute</code> 읽어 현재 KST 와 <strong>±5분 윈도우 매칭</strong> 시점에만
+        파이프라인 진행. 그 외 trigger 는 즉시 skip (DB row 추가 X).
+      </p>
+    </div>
+
+    <div class="callout tip">
+      <span class="label">왜 이 설계?</span>
+      workflow 파일을 GitHub API 로 동적 수정하려면 PAT 권한 + 매번 commit 발생 — 무거움. 매 10분 sweep 은 free tier 의
+      18% (월 360분) 만 사용. admin 변경은 즉시 반영 (다음 cron trigger 부터).
+    </div>
+
+    <!-- ───────────────── 2. 흐름 ───────────────── -->
+    <h2 id="flow"><span class="num">02</span>동작 흐름</h2>
+    <p class="section-lead">cron trigger 부터 메일 발송까지 5 게이트.</p>
+
+    <div class="flow">┌─────────────────────────────────────────────────────────────────┐
+│  <span class="hl">GitHub Actions cron</span>  '*/10 23,0 * * *' UTC                  │
+│  KST 08:00, 08:10, 08:20, ..., 09:50  (일 12회 trigger)         │
+└────────────────────────────────┬────────────────────────────────┘
+                                 ▼
+                  ┌──────────────────────────┐
+                  │   cli.run_command()      │
+                  └──────────┬───────────────┘
+                             ▼
+            ┌──────────────────────────────────┐
+            │  <span class="em">게이트 ①</span> scrape_enabled?  │
+            │     OFF → return                 │
+            └──────────┬───────────────────────┘
+                       ▼
+            ┌──────────────────────────────────┐
+            │  <span class="em">게이트 ②</span> subscribers 0?   │
+            │     yes → return                 │
+            └──────────┬───────────────────────┘
+                       ▼
+            ┌──────────────────────────────────┐
+            │  <span class="em">게이트 ③</span> 윈도우 안?  ⭐NEW │
+            │     |now − target| > 5분 → return│
+            │     (target = admin send_hour:m) │
+            └──────────┬───────────────────────┘
+                       ▼
+            ┌──────────────────────────────────┐
+            │  <span class="em">게이트 ④</span> 오늘 success? ⭐NEW│
+            │     이미 있음 → return           │
+            └──────────┬───────────────────────┘
+                       ▼
+            ┌──────────────────────────────────┐
+            │  <span class="ok">▶ pipeline.run()</span>             │
+            │  검색→추출→DB→Gemini→Gmail BCC   │
+            └──────────────────────────────────┘
+
+<span class="warn">강제발송 (admin 버튼)</span> = force=True → ③④ 무시
+<span class="warn">로컬 dry-run</span>      = dry_run=True → ③④ 무시 (테스트)</div>
+
+    <!-- ───────────────── 3. Secrets ───────────────── -->
+    <h2 id="secrets"><span class="num">03</span>GitHub Secrets 8개 등록</h2>
+    <p class="section-lead">위치: GitHub repo → <strong>Settings → Secrets and variables → Actions → New repository secret</strong>.</p>
+
+    <p>이미 <code>.env</code> 에 있는 값을 그대로 복붙하시면 됩니다 (양쪽 동일하게 유지).</p>
+
+    <div class="secrets">
+      <div class="secret">
+        <div class="name">BRAVE_SEARCH_API_KEY</div>
+        <div class="desc">Brave Search 검색 API 키.</div>
+        <div class="src">FROM .env</div>
+      </div>
+      <div class="secret">
+        <div class="name">GEMINI_API_KEY</div>
+        <div class="desc">Google AI Studio 발급 키.</div>
+        <div class="src">FROM .env</div>
+      </div>
+      <div class="secret">
+        <div class="name">GMAIL_USER</div>
+        <div class="desc">발신용 Gmail 주소 (대표님 메일).</div>
+        <div class="src">FROM .env</div>
+      </div>
+      <div class="secret">
+        <div class="name">GMAIL_APP_PASSWORD</div>
+        <div class="desc">Gmail 앱 비밀번호 16자리 (공백 제거).</div>
+        <div class="src">FROM .env</div>
+      </div>
+      <div class="secret">
+        <div class="name">SUPABASE_URL</div>
+        <div class="desc">Supabase 프로젝트 URL.</div>
+        <div class="src">FROM .env</div>
+      </div>
+      <div class="secret">
+        <div class="name">SUPABASE_SERVICE_ROLE_KEY</div>
+        <div class="desc">RLS 우회용 service_role JWT.</div>
+        <div class="src">FROM .env</div>
+      </div>
+      <div class="secret">
+        <div class="name">ADMIN_TOKEN</div>
+        <div class="desc">admin 페이지 Basic Auth 토큰 (cron 자체엔 불필요하지만 secret 자리 일관성 유지).</div>
+        <div class="src">FROM .env</div>
+      </div>
+      <div class="secret">
+        <div class="name">SUPABASE_SCHEMA</div>
+        <div class="desc">"ai_news" 고정. workflow vars 또는 secret 어디든. 코드 default 도 "ai_news" 라 미등록도 OK.</div>
+        <div class="src">OPTIONAL</div>
+      </div>
+    </div>
+
+    <div class="callout danger">
+      <span class="label">🔒 보안</span>
+      <code>SUPABASE_SERVICE_ROLE_KEY</code> 는 RLS 우회 권한이라 절대 클라이언트 / 공개 저장소 노출 금지.
+      <code>.env</code> 는 이미 <code>.gitignore</code> 에 포함되어 있고 GitHub Secrets 는 commit 안 됨.
+    </div>
+
+    <ol class="steps">
+      <li>
+        <strong>repo 진입</strong>
+        대표님 GitHub repo 의 <strong>Settings</strong> 탭 클릭.
+      </li>
+      <li>
+        <strong>Actions secrets 탐색</strong>
+        좌측 메뉴 <strong>Secrets and variables → Actions</strong> 클릭.
+      </li>
+      <li>
+        <strong>Repository secrets 추가</strong>
+        <strong>New repository secret</strong> 버튼 → Name + Value 입력 → <strong>Add secret</strong> 반복 (위 8개).
+        Value 는 한 번 등록하면 다시 못 보니까 <code>.env</code> 와 정확히 동일하게 복붙.
+      </li>
+      <li>
+        <strong>등록 확인</strong>
+        등록 후 화면에 secret 이름만 노출되고 값은 <code>***</code> 마스킹. 8개 모두 보이면 완료.
+      </li>
+    </ol>
+
+    <!-- ───────────────── 4. 마이그레이션 ───────────────── -->
+    <h2 id="migrate"><span class="num">04</span>Supabase 마이그레이션 0004</h2>
+    <p class="section-lead"><code>search_settings</code> 테이블에 <code>send_hour</code>, <code>send_minute</code> 컬럼 추가.</p>
+
+    <ol class="steps">
+      <li>
+        <strong>Supabase Dashboard 접속</strong>
+        프로젝트 → <strong>SQL Editor</strong> 탭.
+      </li>
+      <li>
+        <strong>마이그레이션 SQL 복붙</strong>
+        다음 SQL 그대로 paste + <strong>Run</strong>:
+        <pre><span class="k">alter table</span> ai_news.search_settings
+    <span class="k">add column if not exists</span> send_hour <span class="k">smallint not null default</span> <span class="n">8</span>
+      <span class="k">check</span> (send_hour <span class="k">between</span> <span class="n">0</span> <span class="k">and</span> <span class="n">23</span>),
+    <span class="k">add column if not exists</span> send_minute <span class="k">smallint not null default</span> <span class="n">40</span>
+      <span class="k">check</span> (send_minute <span class="k">between</span> <span class="n">0</span> <span class="k">and</span> <span class="n">59</span>);</pre>
+        (원본 파일: <code>supabase/migrations/0004_send_schedule.sql</code>)
+      </li>
+      <li>
+        <strong>적용 확인</strong>
+        <strong>Table Editor → schema: ai_news → search_settings</strong> 선택 →
+        <code>send_hour=8</code>, <code>send_minute=40</code> 컬럼이 생긴 row 1개 보이면 OK.
+      </li>
+    </ol>
+
+    <div class="callout warn">
+      <span class="label">⚠️ 멱등성</span>
+      <code>if not exists</code> 가 있어 두 번 실행해도 안전. 기존 데이터 손실 0.
+    </div>
+
+    <!-- ───────────────── 5. 트리거 ───────────────── -->
+    <h2 id="trigger"><span class="num">05</span>수동 트리거 1회 — 정상 동작 검증</h2>
+    <p class="section-lead">cron 자동 실행을 기다리기 전에 수동으로 한 번 돌려 secrets 등록 + 마이그레이션이 잘 됐는지 확인.</p>
+
+    <ol class="steps">
+      <li>
+        <strong>Actions 탭 진입</strong>
+        GitHub repo → <strong>Actions</strong> 탭 → 좌측 <strong>Daily AI News Digest</strong> workflow 클릭.
+      </li>
+      <li>
+        <strong>Run workflow 클릭</strong>
+        우측 상단 <strong>Run workflow</strong> 버튼 → branch=main 확인 → <strong>Run workflow</strong>.
+        (옵션 <code>dry_run</code> 체크하면 메일 발송 없이 흐름만 검증.)
+      </li>
+      <li>
+        <strong>로그 관찰</strong>
+        실행 중인 run 클릭 → <strong>digest</strong> job → 로그 확인. 다음 패턴이 보이면 정상:
+        <pre><span class="c"># 시각 매칭 시점이 아니면 즉시 skip — 정상 동작</span>
+send-schedule gate: outside window (target=08:40 KST, now=14:23 KST), skipping
+
+<span class="c"># 매칭 시점이고 메일 발송 진행</span>
+run_id=... status=success search=24 extracted=18 articles=12 accepted=10</pre>
+      </li>
+      <li>
+        <strong>메일 수신 확인</strong>
+        본인 Gmail 받은편지함에 한국어 요약 메일이 도착했으면 완료.
+        매칭 시점 외 trigger 라서 outside window skip 만 나면 정상 (cron 매 10분 sweep 중 1번만 발송).
+      </li>
+    </ol>
+
+    <div class="callout tip">
+      <span class="label">💡 첫 검증 팁</span>
+      바로 결과 보려면 admin 페이지에서 <strong>▶ 강제발송</strong> 클릭 (cron 무관 즉시 진행).
+      또는 admin Settings 의 <code>send_hour:send_minute</code> 을 현재 KST 시각 근처로 임시 변경 → 다음 10분 trigger 에서 발송 → 다시 8:40 으로 복원.
+    </div>
+
+    <!-- ───────────────── 6. admin 시각 변경 ───────────────── -->
+    <h2 id="admin"><span class="num">06</span>admin 에서 발송 시각 변경</h2>
+    <p class="section-lead">발송 시각은 admin Settings 탭에서 즉시 변경. workflow 파일 / git push 불필요.</p>
+
+    <div class="card">
+      <h3 style="margin-top: 0;">UI 위치</h3>
+      <p>
+        <code>make admin</code> → <code>http://127.0.0.1:6661/#settings</code> 로 진입 (또는 운영 서버 admin URL).
+      </p>
+      <h3>입력 폼</h3>
+      <p>Settings 탭의 마지막 필드 "<strong>발송 시각 (KST)</strong>" 칸 2개 (hour : minute).</p>
+      <ul style="color: var(--fg-dim); padding-left: 1.2rem;">
+        <li><strong>hour</strong>: 0 ~ 23 (24시간 표기). 권장: KST 08~09 (cron 윈도우 안).</li>
+        <li><strong>minute</strong>: 0 ~ 59.</li>
+        <li>밖에 둘 수도 있지만 cron sweep 윈도우 (08:00~09:50) 안에 없으면 발송 안 됨.</li>
+      </ul>
+      <h3>저장 효과</h3>
+      <p>
+        <strong>저장</strong> 버튼 클릭 → 다음 cron trigger 부터 즉시 반영.
+        잘못된 값 (24 / 60 / 음수 등) 은 400 응답 + 폼 에러로 reject.
+      </p>
+    </div>
+
+    <h3>예시 — 09:15 KST 로 변경</h3>
+    <ol class="steps">
+      <li><strong>Settings 탭</strong> → 발송 시각 hour=9, minute=15 입력.</li>
+      <li><strong>저장</strong> 클릭. 페이지 자동 새로고침.</li>
+      <li>Overview 탭 첫 행 "<strong>발송 시각: 09:15 KST</strong>" 표시 확인.</li>
+      <li>다음 09:10 또는 09:20 cron trigger 가 윈도우 (09:10~09:20) 안이라 통과 → 메일 발송.</li>
+    </ol>
+
+    <div class="callout warn">
+      <span class="label">⚠️ 윈도우 범위 밖</span>
+      cron 은 KST 08:00 ~ 09:50 만 sweep. 예를 들어 <code>send_hour=14</code> 로 저장하면 cron 이 14:00 에 깨지 않아 발송 X.
+      14시 발송이 필요하면 <code>.github/workflows/daily-digest.yml</code> 의 <code>cron</code> 값을 추가 변경 (코드 변경 필요).
+    </div>
+
+    <!-- ───────────────── 7. cron 자동 동작 확인 ───────────────── -->
+    <h2 id="verify"><span class="num">07</span>cron 자동 동작 확인 (다음날)</h2>
+    <p class="section-lead">수동 트리거 성공 후 다음날 자동 발송이 정상 동작하는지 확인.</p>
+
+    <ol class="steps">
+      <li>
+        <strong>다음날 08:40 KST 전후 메일 확인</strong>
+        기본 설정 (8:40) 기준 KST 08:35~08:45 사이 메일 도착. 받은편지함의 한국어 요약 메일.
+      </li>
+      <li>
+        <strong>admin History 탭 확인</strong>
+        admin → History → 최근 run 1개가 <code>status=success</code>, <code>article_count=12~20</code>, digest preview 표시되면 OK.
+      </li>
+      <li>
+        <strong>GitHub Actions 탭에서 skip 패턴 확인</strong>
+        Actions → Daily AI News Digest 의 최근 run 12개 (KST 08:00 ~ 09:50) 중 1개만 ✅ success,
+        나머지 11개는 ✅ success 이지만 로그에 <code>outside window</code> 또는 <code>already sent today</code> skip 메시지.
+        (success 처럼 보이는 이유: run_command 가 exit 0 으로 깨끗하게 종료. 실제 발송은 1회만.)
+      </li>
+    </ol>
+
+    <!-- ───────────────── 8. timeline ───────────────── -->
+    <h2 id="timeline"><span class="num">08</span>하루 타임라인 (참고)</h2>
+    <p class="section-lead">기본 설정 (send_hour=8, send_minute=40) 기준. KST.</p>
+
+    <div class="timeline">
+      <div class="event">
+        <div class="when">08:00 KST · cron 1번째 trigger</div>
+        <div class="what">윈도우 (08:35 ~ 08:45) 밖 → skip. runs 추가 X.</div>
+      </div>
+      <div class="event">
+        <div class="when">08:10, 08:20 KST · cron 2~3번째</div>
+        <div class="what">여전히 윈도우 밖 → skip.</div>
+      </div>
+      <div class="event">
+        <div class="when">08:30 KST · cron 4번째</div>
+        <div class="what">여전히 5분 차이 초과 → skip.</div>
+      </div>
+      <div class="event">
+        <div class="when">08:40 KST · cron 5번째 ⭐</div>
+        <div class="what"><strong style="color: var(--ok);">정확 매칭 → 파이프라인 진행 → 메일 발송.</strong> runs 에 success row 추가.</div>
+      </div>
+      <div class="event">
+        <div class="when">08:50, 09:00, ..., 09:50 KST · cron 6~12번째</div>
+        <div class="what">윈도우는 8:35~8:45 지만 has_success_today=True → skip. 중복 발송 0.</div>
+      </div>
+      <div class="event">
+        <div class="when">다음날 00:00 KST</div>
+        <div class="what">새 KST 일자 시작. has_success_today 리셋. 08:40 에 다시 발송.</div>
+      </div>
+    </div>
+
+    <!-- ───────────────── 9. 트러블슈팅 ───────────────── -->
+    <h2 id="faq"><span class="num">09</span>트러블슈팅</h2>
+    <p class="section-lead">자주 발생하는 케이스 5개.</p>
+
+    <h3>Q1. cron 12회 모두 skip — 한 번도 발송 안 됨</h3>
+    <p>가능한 원인 3가지:</p>
+    <ul style="color: var(--fg-dim);">
+      <li><strong>send_hour:send_minute 가 윈도우 밖</strong> — admin Settings 에서 KST 08:00~09:50 범위 안으로 변경 (e.g. <code>8:40</code>).</li>
+      <li><strong>scrape_enabled=OFF</strong> — Overview 탭의 토글 ON 으로 변경.</li>
+      <li><strong>subscribers 비어 있음</strong> — Subscribers 탭에서 최소 1명 추가.</li>
+    </ul>
+
+    <h3>Q2. 같은 날 두 번 발송됨</h3>
+    <p>이론상 불가능 (has_success_today 차단). 만약 발생하면:</p>
+    <ul style="color: var(--fg-dim);">
+      <li><code>runs</code> 테이블에 <code>finished_at</code> 이 null 인 zombie row 가 있는지 SQL Editor 확인.</li>
+      <li>강제발송 (admin 버튼) 은 의도적으로 중복 허용 — 사람 트리거 동작.</li>
+    </ul>
+
+    <h3>Q3. GitHub Actions cron 자체가 안 깨어남</h3>
+    <p>GitHub free tier 의 known issue — repo 가 60일 inactive 면 cron 자동 disable.</p>
+    <ul style="color: var(--fg-dim);">
+      <li>해결: Actions 탭 → Daily AI News Digest → <strong>Enable workflow</strong> 클릭.</li>
+      <li>예방: 가끔 commit 1개 push 또는 수동 trigger 1회.</li>
+    </ul>
+
+    <h3>Q4. admin Settings 에 send_hour 입력 칸이 안 보임</h3>
+    <p>마이그레이션 0004 미적용 또는 admin 서버 재시작 안 함.</p>
+    <ul style="color: var(--fg-dim);">
+      <li>Supabase SQL Editor 에서 §4 의 SQL 재실행 (멱등 — 두 번 OK).</li>
+      <li>로컬 admin 인 경우 <code>make admin</code> 재시작.</li>
+    </ul>
+
+    <h3>Q5. GitHub Actions 분 cap 걱정</h3>
+    <p>private repo free tier 월 2,000분. 현재 설계:</p>
+    <ul style="color: var(--fg-dim);">
+      <li>일 12회 trigger × ~1분/회 = <strong>월 ~360분 (18%)</strong>. 안전 마진 충분.</li>
+      <li>public repo 면 무제한.</li>
+    </ul>
+
+    <!-- ───────────────── 10. 최종 체크리스트 ───────────────── -->
+    <h2 id="checklist"><span class="num">10</span>최종 체크리스트</h2>
+
+    <div class="check">
+      <h4>대표님 본인 점검 (운영 시작 전)</h4>
+      <ul>
+        <li>GitHub repo Settings → Secrets and variables → Actions 에 8개 secret 보임</li>
+        <li>Supabase SQL Editor 에서 마이그레이션 0004 실행 + Table Editor 에서 send_hour/send_minute 컬럼 확인</li>
+        <li>GitHub Actions 탭 → Daily AI News Digest → Run workflow 수동 1회 성공 (또는 outside window skip)</li>
+        <li>본인 Gmail 받은편지함에 한국어 요약 메일 도착 (수동 trigger 또는 admin 강제발송)</li>
+        <li>admin Settings 탭 → 발송 시각 입력 칸 2개 보이고 저장 동작</li>
+        <li>admin Overview 탭 첫 행 "발송 시각: 08:40 KST" 표시</li>
+        <li>다음날 자동 발송 1회 확인 — admin History 탭 또는 메일</li>
+      </ul>
+    </div>
+
+    <div class="callout ok" style="margin-top: 3rem;">
+      <span class="label">✅ 완료</span>
+      이 가이드대로 다 하셨으면 매일 아침 8:40 KST (또는 admin 에서 정한 시각) 에 자동 발송이 가동됩니다.
+      시간 바꾸고 싶을 땐 admin Settings 에서 입력 + 저장만 하시면 됩니다.
+    </div>
+
+    <p style="text-align: center; color: var(--fg-muted); font-size: 0.85rem; margin-top: 4rem;">
+      ai_news_scraping · admin-send-schedule 피처 (2026-05-24)<br>
+      자세한 PRD / 설계: <code>docs/features/2026-05-24-admin-send-schedule/</code>
+    </p>
+
+  </main>
+</div>
+</body>
+</html>
