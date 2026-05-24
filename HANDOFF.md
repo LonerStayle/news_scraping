@@ -272,6 +272,13 @@ ai_news_scraping/
 - 대표님 `.env`: `gemini-3.5-flash` (실제 동작 확인됨)
 - Google AI Studio 가 "2.x deprecate" 안내 띄울 수 있음 — 그래도 당분간 동작
 
+### 9-8. Brave Search `site:` 는 **호스트만** — 경로 X (commit `7d85e69`)
+
+- `site:openai.com` ✅ / `site:openai.com/research` ❌ → **422 Unprocessable Entity** 로 쿼리 전체 거부
+- 대표님이 admin Sources 에 `openai.com/research` 류 URL 을 넣어 3회 연속 강제발송이 `status=skipped` 로 끝나고 메일 미수신 (2026-05-24 사고)
+- 현재 코드 (`search_config_store._normalize_domain`) 는 path/scheme/port/query/공백 들어오면 즉시 `ValueError` — admin 폼이 400 으로 거절
+- ⚠️ **임시 안전장치**: 호스트만 강제 = 매체 안에서 분야 좁히기 불가 → §12 의 최우선 후보로 path-prefix 클라이언트 필터 도입 예정
+
 ---
 
 ## 10. CLAUDE.md 정책 (반드시 지킬 것)
@@ -346,6 +353,7 @@ CLAUDE.md §6 의 두 가지 원칙:
 
 | 우선순위 | 후보 | 작업량 |
 |---------|------|--------|
+| 🔥 ⭐⭐⭐⭐ | **매체 path-prefix 클라이언트 필터** (대표님 5/24 명시 요청) — 현재 host-only 는 임시. 매체 안에서 분야가 잘 안 잡힘 (예: `openai.com` 전체보다 `/research` / `/news` / `/blog` 만 노리고 싶음) | 아래 별도 섹션 |
 | ⭐⭐⭐ | runs.scheduled_at 또는 trigger 종류 (cron/admin/manual) 컬럼 추가 | 1 commit |
 | ⭐⭐ | History 탭에서 특정 run 의 article 목록 보기 (drill-down) | 2~3 commit |
 | ⭐⭐ | admin 페이지에 본인 메일 즉시 발송 (test recipient) 기능 | 1 commit |
@@ -353,6 +361,34 @@ CLAUDE.md §6 의 두 가지 원칙:
 | ⭐ | 다국어 발송 (한국어 + 영어 원문 병기) — 비전 §5 의 "한국어 단일" 정책 변경 필요 |  |
 
 지금 진행할 필요는 없습니다. 필요하면 ralph-loop 또는 `/fast-tasks` 로 다음 batch.
+
+---
+
+### 12-A. 🔥 매체 path-prefix 필터 (최우선 — 대표님 5/24 명시 요청)
+
+**왜 필요한가** (대표님 원문):
+> "다음 고도화는 그 연산자도 언젠간 되게끔하는거야. 좁히지 않으니까 내가 원하는 분야가 잘 안 잡히네."
+
+현재 `search_sources` 는 호스트만 받는다 — 매체 한 곳 전체에서 검색되므로 마케팅·이벤트·HR 글 등 잡음이 섞임. 대표님이 admin 에 `openai.com/research` 를 넣었던 의도가 이거였음.
+
+**왜 즉시 path 를 다시 못 받게 했는가**: Brave Search `site:` 연산자는 호스트만 받음 (구글도 동일 표준). 직접 통과 → 422. 그래서 commit `7d85e69` 에서 입력 단계 reject 로 막아 뒀음. ⚠️ **이건 임시 안전장치**.
+
+**구현 방향 (이전 대화에서 합의된 옵션 B = 클라이언트 측 필터)**:
+
+1. **마이그레이션 0004** — `search_sources` 에 `path_prefix text` 컬럼 추가. `(domain, path_prefix) unique` 제약으로 같은 호스트 + 다른 prefix 를 별도 row 로 관리.
+2. **`SourceRecord`** 에 `path_prefix: str | None` 필드 추가. `_normalize_path_prefix()` 헬퍼 — `/research` 같은 path 만 허용, 호스트/스킴/쿼리 거부.
+3. **`SourceStore.add/update`** — `path_prefix` 인자 추가. 기존 None 인 row 는 그대로 동작 (backwards compatible — DB 정책 X, 코드만).
+4. **`search.py`**:
+   - `search()` 가 `source_domains` 대신 `list[tuple[str, str | None]]` 받도록 변경 (host, path_prefix)
+   - Brave 쿼리는 여전히 `site:host` 만 (422 회피)
+   - 응답 받은 후 `_looks_like_article_url` 다음 단계로 **path-prefix 매칭** 검사 추가. 매체별로 prefix 가 있는 row 가 있으면 매칭, 없으면 호스트 전체 통과.
+5. **`admin.html` Sources 폼** — "경로 (선택)" 인풋 추가 + 안내 텍스트 갱신. add + edit 둘 다.
+6. **테스트** — `_normalize_path_prefix` 단위 + `search` 의 prefix 필터링 통합.
+7. **마이그레이션 후 DB 정리** — 기존 row 의 `path_prefix=NULL` 로 두고, 대표님이 원하는 매체만 path 추가.
+
+**작업량 견적**: 마이그레이션 1 + store 갱신 + admin 폼 + search 필터 = **5~8 commit** 분량.
+
+**시작 시점**: 현재 host-only 로 운영 시작 → 1~2주 안에 "이 매체는 분야 좁히고 싶다" 가 명확해질 때 시작 (그래야 어느 매체에 어떤 prefix 가 필요한지 데이터로 결정 가능). ralph-loop 또는 `/auto-brainstorm` 로 진입.
 
 ---
 
@@ -368,6 +404,7 @@ CLAUDE.md §6 의 두 가지 원칙:
 | BackgroundTasks 비동기 발송 | 강제발송 클릭 후 페이지 안 멈춤 + polling 으로 진행 표시 |
 | ADMIN_AUTH_ENABLED=false (로컬) | 1인 운영 / 외부 노출 X / 매번 비밀번호 입력 번거로움 |
 | dry-run 시 articles DB skip | 검증 환경이 운영 dedup 을 가리지 않도록 |
+| search_sources 호스트만 강제 (commit `7d85e69`) | Brave site: 가 path 거부 (422) — 자동 잘라내기 (매직) 대신 명시 reject 가 디버깅에 유리. ⚠️ **임시**: §12-A 로 path-prefix 클라이언트 필터 도입 예정 |
 
 ---
 
