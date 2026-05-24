@@ -1,8 +1,10 @@
 # HANDOFF — ai_news_scraping
 
-> 작성일: 2026-05-23 · 인계 시점 commit: `960f41f` · 259 tests pass
+> 작성일: 2026-05-23 · 최근 갱신: **2026-05-24** · 인계 시점 commit: `0f280f3` · **284 tests pass**
 
 이 문서를 위에서 아래로 한 번 읽으시면 프로젝트의 **무엇·왜·어떻게·어디** 를 다 알 수 있습니다. 다음 인계자가 첫 번째로 읽을 단일 문서.
+
+> **2026-05-24 갱신 요약**: ① Brave `site:` 의 path 거부 (422) 사고 → host-only 임시 안전장치 (commit `7d85e69`) → 정식 path-prefix 클라이언트 필터 (T1~T8, `0117a93..680eb1a`). admin Sources 폼에 host 또는 host/path 둘 다 입력 가능. ② 268 → 284 tests (+16). ③ 자세한 흐름은 §9-8, §12-A, `docs/features/2026-05-24-search-path-prefix/` 참조.
 
 ---
 
@@ -61,13 +63,15 @@
 
 | 영역 | 상태 |
 |------|------|
-| 코드 산출물 | ✅ Phase A~G 모두 완료 (commit history 참조) |
-| 테스트 | ✅ 259 passed (lint/mypy/pytest 모두 exit 0) |
+| 코드 산출물 | ✅ Phase A~G 완료 + search-path-prefix 정식 형태 (T1~T8, 2026-05-24) |
+| 테스트 | ✅ **284 passed** (lint/mypy/pytest 모두 exit 0) |
 | API 키 발급 | ✅ Brave / Gemini / Gmail / Supabase / Admin token |
-| Supabase 마이그레이션 | ⚠️ **확인 필요**: 0001 + 0002 + 0003 적용 여부 |
-| 로컬 dry-run | ✅ 통과 (대표님 17:47 확인) |
+| Supabase 마이그레이션 | ⚠️ **확인 필요**: 0001 + 0002 + 0003 적용 여부 (0004 는 불필요 — search-path-prefix 가 단일 컬럼 유지) |
+| Brave site: 422 사고 (5/24) | ✅ 해결 — host-only 임시 (commit `7d85e69`) → 정식 path-prefix 클라이언트 필터 (`0117a93..680eb1a`) |
+| 로컬 dry-run | ✅ 통과 |
 | 로컬 실 발송 | ✅ 1회 성공 (대표님 본인 메일 수신 확인) |
 | GitHub Actions cron | ⚠️ **미설정**: secrets 8개 등록 + 첫 수동 트리거 검증 필요 |
+| DB row 정리 (5/24 사고 후) | ⚠️ **확인 필요**: 대표님이 SQL Editor 에서 `delete from ai_news.search_sources` 1회 후 admin 재시작 → yaml seed 자동 import 됐는지 |
 
 ### 대표님 본인 점검 체크리스트 (운영 시작 전)
 
@@ -77,9 +81,10 @@
    - 0003: `search_sources.description` 컬럼 존재 (alter table)
 2. [ ] Supabase Settings → API → "Exposed schemas" 에 `ai_news` 추가됨
 3. [ ] `.env` 에 8개 환경변수 + `ADMIN_AUTH_ENABLED=false` (로컬용) + `SUPABASE_SCHEMA=ai_news`
-4. [ ] `make dry-run` 1회 통과 → articles 테이블에 row 안 쌓이는지 확인 (T2 적용)
+4. [ ] `make dry-run` 1회 통과 → articles 테이블에 row 안 쌓이는지 확인 (T2 dry-run dedup 함정 적용)
 5. [ ] `make admin` 후 `http://127.0.0.1:6661` 접속 → 6탭 모두 정상 동작
-6. [ ] (옵션) GitHub Actions secrets 등록 + 수동 트리거 1회
+6. [ ] **Sources 탭에서 path 입력 테스트** — `openai.com/research` 등록 → ▶ 강제발송 → 메일에서 그 prefix 결과만 통과되는지 확인
+7. [ ] (옵션) GitHub Actions secrets 등록 + 수동 트리거 1회
 
 ---
 
@@ -366,16 +371,27 @@ CLAUDE.md §6 의 두 가지 원칙:
 
 ### 12-A. ✅ 매체 path-prefix 필터 — 완료 (2026-05-24)
 
-**완료 commits**: T1 (`0117a93`) / T2 (`9949b86`) / T3 (`edfc65b`) / T4 (`e292b55`) / T5 (`a54d140`) / T6 (`7fababb`) / T7 (`5667cf8`).
+**완료 commits**: T1 (`0117a93`) / T2 (`9949b86`) / T3 (`edfc65b`) / T4 (`e292b55`) / T5 (`a54d140`) / T6 (`7fababb`) / T7 (`5667cf8`) / T8 (`680eb1a`) / log (`0f280f3`).
 
-**최종 형태**:
+**최종 형태** (실제 채택은 옵션 A = 단일 컬럼. 원래 plan 의 옵션 B 컬럼 분리는 admin UX + 마이그레이션 비용 고려해 reject):
 - admin Sources 입력 칸 1개. `openai.com` 또는 `openai.com/research/papers` 둘 다 OK
 - `search_config_store._split_host_path()` 가 host/path 분리, `_matches_path_prefix()` 가 segment-aware (`/research` ↔ `/researchers` false positive 차단)
 - `LoadedConfig.source_entries: list[SourceEntry]` 로 명시 분해. D5 (host-only 우선) 정책은 `source_name_map` 의 2-pass + `search()` 의 host_only 분기로 결정적
-- search 인자는 list[str] / list[SourceEntry] 둘 다 받음 (backwards compat 보존)
+- search 인자는 `list[str]` / `list[SourceEntry]` 둘 다 받음 (backwards compat 보존)
 - 마이그레이션 0004 불필요 — `search_sources.domain` 단일 컬럼 유지
+- 자세한 변경이력: `docs/features/2026-05-24-search-path-prefix/` 의 PRD (CH-001) → tech-design (CH-002) → plan (CH-003) → 구현 batch (CH-004) → 검증 (CH-005)
 
-**아래는 원래 본 섹션의 구현 계획 — 이력 보존용으로 남김** (실제 구현은 docs/features/2026-05-24-search-path-prefix/ 폴더의 PRD + tech-design + plan + 변경이력 참조):
+**활용 예** (admin Sources 에 등록):
+
+| 입력값 | 동작 |
+|--------|------|
+| `openai.com` | openai.com 전체 통과 (기존 동작) |
+| `openai.com/research` | openai.com/research/... 만 통과 |
+| `openai.com/research` + `openai.com/news` (두 row) | 두 prefix 모두 통과 |
+| `openai.com` + `openai.com/research` (두 row 공존) | host-only 우선 → 전체 통과 (D5) |
+| `https://openai.com` | 400 reject (스킴 거부) |
+
+**아래는 원래 본 섹션의 구현 계획 — 이력 보존용 (실제 채택은 위와 다름)**:
 
 **왜 필요한가** (대표님 원문):
 > "다음 고도화는 그 연산자도 언젠간 되게끔하는거야. 좁히지 않으니까 내가 원하는 분야가 잘 안 잡히네."
@@ -415,7 +431,10 @@ CLAUDE.md §6 의 두 가지 원칙:
 | BackgroundTasks 비동기 발송 | 강제발송 클릭 후 페이지 안 멈춤 + polling 으로 진행 표시 |
 | ADMIN_AUTH_ENABLED=false (로컬) | 1인 운영 / 외부 노출 X / 매번 비밀번호 입력 번거로움 |
 | dry-run 시 articles DB skip | 검증 환경이 운영 dedup 을 가리지 않도록 |
-| search_sources 호스트만 강제 (commit `7d85e69`) → path 도 허용으로 확장 (2026-05-24 T1~T7) | 1차: Brave site: 가 path 거부 (422) — 임시 안전장치로 reject. 2차: 단일 입력 칸 + 클라이언트 측 segment-aware 필터로 정식화. 마이그레이션 0 (단일 domain 컬럼 유지) + admin UX 단순성 보존. |
+| search_sources 호스트만 강제 (commit `7d85e69`) → path 도 허용으로 확장 (2026-05-24 T1~T8) | 1차: Brave site: 가 path 거부 (422) — 임시 안전장치로 reject. 2차: 단일 입력 칸 + 클라이언트 측 segment-aware 필터로 정식화. 마이그레이션 0 (단일 domain 컬럼 유지) + admin UX 단순성 보존. |
+| path-prefix 데이터 모델: 단일 컬럼 (옵션 A) | 옵션 B (path_prefix 분리 컬럼) 대비 admin UX 단순 (인풋 1개 유지), 마이그레이션 0, CLAUDE.md §5 "최소 UI" 원칙 부합. 단점 (컬럼 의미 약간 모호) 은 코드 주석 + _split_host_path 헬퍼로 흡수. |
+| path 매칭: segment-aware (옵션 B) | 단순 startswith 는 `/research` ↔ `/researchers` false positive. segment boundary 확인이 1줄 추가로 끝나는데 정확도 큰 차이. |
+| search() backwards compat (list[str] 도 허용) | 시그니처 변경 영향 최소화 + caller wave commit (T5) 의 fixture 마이그레이션 비용 ↓. 점진적 마이그레이션 가능. |
 
 ---
 
@@ -423,12 +442,12 @@ CLAUDE.md §6 의 두 가지 원칙:
 
 - **owner**: 대표님 (`dlwlstjq410@gmail.com`)
 - **repo**: (대표님 GitHub 에서 확인)
-- **개발 도구**: Claude Code + ralph-loop 플러그인 + js-super skills
-- **개발 기간**: 2026-05-23 하루 (vision-intake → Phase A~G + fast-tasks)
-- **총 commit 수**: 40+ (linear history, main 브랜치)
+- **개발 도구**: Claude Code + ralph-loop 플러그인 + js-super skills (PRD → tech-design → plan → execute-plan 자동화 흐름)
+- **개발 기간**: 2026-05-23 하루 (vision-intake → Phase A~G + fast-tasks) + 2026-05-24 (search-path-prefix 사고 대응 + 정식 구현)
+- **총 commit 수**: 50+ (linear history, main 브랜치)
 
 ralph 자동 루프로 진행됐기 때문에 모든 commit 메시지가 task 단위로 명확합니다 — `git log --oneline` 으로 진행 history 확인 가능.
 
-질문 생기면 `CLAUDE.md` (비전·정책) → `README.md` (운영) → `architecture.html` (구조) → `setup-guide.html` (셋업) 순으로 참조.
+질문 생기면 `CLAUDE.md` (비전·정책) → `README.md` (운영) → `architecture.html` (구조) → `setup-guide.html` (셋업) → `docs/features/<date>-<slug>/` (피처별 PRD/design/plan) 순으로 참조.
 
 좋은 운영 되시길!
