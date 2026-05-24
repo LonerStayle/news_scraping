@@ -146,5 +146,16 @@ def _domain_of(url: str) -> str:
     return urlparse(url).netloc.lower().removeprefix("www.")
 
 
+def _matches_path_prefix(url_path: str, prefix: str) -> bool:
+    """segment-aware path-prefix 매칭. ``/research`` 가 ``/researchers`` 와 매치되지 않게.
+
+    빈 prefix (``""`` / ``"/"``) 는 모두 매치 (host-only row, FR-2).
+    """
+    if not prefix or prefix == "/":
+        return True
+    norm = prefix.rstrip("/")
+    return url_path == norm or url_path.startswith(norm + "/")
+
+
 def _clamp(value: int, lo: int, hi: int) -> int:
     return max(lo, min(value, hi))

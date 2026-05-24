@@ -8,9 +8,28 @@ from ai_news_scraping.search import (
     BRAVE_MAX_COUNT,
     BRAVE_SEARCH_ENDPOINT,
     SearchResult,
+    _matches_path_prefix,
     build_query,
     search,
 )
+
+
+def test_matches_path_prefix_segment_aware() -> None:
+    # 빈 prefix → 모두 매치 (host-only row, FR-2)
+    assert _matches_path_prefix("/research/x", "") is True
+    assert _matches_path_prefix("/anything", "") is True
+    assert _matches_path_prefix("/x", "/") is True
+    # 정확 매치 / 하위 segment 매치
+    assert _matches_path_prefix("/research", "/research") is True
+    assert _matches_path_prefix("/research/x", "/research") is True
+    assert _matches_path_prefix("/research/papers/2026", "/research/papers") is True
+    # segment boundary — false positive 차단 (D2 핵심)
+    assert _matches_path_prefix("/researchers/x", "/research") is False
+    assert _matches_path_prefix("/research-old/x", "/research") is False
+    # prefix 끝 슬래시 정규화
+    assert _matches_path_prefix("/research/x", "/research/") is True
+    # 차단
+    assert _matches_path_prefix("/news/x", "/research") is False
 
 
 class FakeResponse:
