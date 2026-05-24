@@ -217,6 +217,8 @@ def test_in_memory_settings_default() -> None:
     assert cur == SearchSettings()
     assert cur.freshness == "pw"
     assert cur.num_results_per_keyword == 20
+    assert cur.send_hour == 8
+    assert cur.send_minute == 40
 
 
 def test_in_memory_settings_partial_update() -> None:
@@ -242,6 +244,39 @@ def test_in_memory_settings_invalid_ranges() -> None:
         s.update(max_articles_for_summary=101)
     with pytest.raises(ValueError, match="min_body"):
         s.update(min_body_len=10)
+
+
+def test_in_memory_settings_send_time_update() -> None:
+    s = InMemorySettingsStore()
+    cur = s.update(send_hour=9, send_minute=15)
+    assert cur.send_hour == 9
+    assert cur.send_minute == 15
+    # 다른 필드 유지
+    assert cur.freshness == "pw"
+
+
+def test_in_memory_settings_invalid_send_hour() -> None:
+    s = InMemorySettingsStore()
+    with pytest.raises(ValueError, match="send_hour"):
+        s.update(send_hour=-1)
+    with pytest.raises(ValueError, match="send_hour"):
+        s.update(send_hour=24)
+
+
+def test_in_memory_settings_invalid_send_minute() -> None:
+    s = InMemorySettingsStore()
+    with pytest.raises(ValueError, match="send_minute"):
+        s.update(send_minute=-1)
+    with pytest.raises(ValueError, match="send_minute"):
+        s.update(send_minute=60)
+
+
+def test_in_memory_settings_send_time_partial_update_preserves_other() -> None:
+    s = InMemorySettingsStore()
+    s.update(send_hour=10)
+    cur = s.get()
+    assert cur.send_hour == 10
+    assert cur.send_minute == 40  # 기본값 유지
 
 
 # ═══════════════════ Supabase: fluent mock ═══════════════════
@@ -450,3 +485,41 @@ def test_supabase_settings_update_empty_payload_returns_current() -> None:
     assert cur == SearchSettings()
     # update 없이 바로 get 만 호출
     assert all(q.updated is None for q in fake.queries)
+
+
+def test_supabase_settings_get_with_send_time() -> None:
+    fake = FakeClient(response_queue=[
+        {"freshness": "pw", "num_results_per_keyword": 20,
+         "max_articles_for_summary": 20, "min_body_len": 300,
+         "send_hour": 9, "send_minute": 15}
+    ])
+    s = SupabaseSettingsStore(fake)
+    cur = s.get()
+    assert cur.send_hour == 9
+    assert cur.send_minute == 15
+
+
+def test_supabase_settings_update_send_time() -> None:
+    fake = FakeClient(response_queue=[
+        None,  # update execute
+        {"freshness": "pw", "num_results_per_keyword": 20,
+         "max_articles_for_summary": 20, "min_body_len": 300,
+         "send_hour": 9, "send_minute": 15},
+    ])
+    s = SupabaseSettingsStore(fake)
+    cur = s.update(send_hour=9, send_minute=15)
+    assert cur.send_hour == 9 and cur.send_minute == 15
+    upd = fake.queries[0].updated
+    assert upd is not None
+    assert upd["send_hour"] == 9
+    assert upd["send_minute"] == 15
+    assert "updated_at" in upd
+
+
+def test_supabase_settings_update_invalid_send_time_short_circuits() -> None:
+    fake = FakeClient()
+    s = SupabaseSettingsStore(fake)
+    with pytest.raises(ValueError, match="send_hour"):
+        s.update(send_hour=24)
+    # 검증 실패 → DB 호출 0
+    assert fake.queries == []
