@@ -32,8 +32,13 @@ def workflow_text() -> str:
     return WORKFLOW_FILE.read_text(encoding="utf-8")
 
 
-def test_cron_at_2340_utc_for_0840_kst(workflow_text: str) -> None:
-    assert 'cron: "40 23 * * *"' in workflow_text
+def test_cron_window_every_10min_utc_23_0(workflow_text: str) -> None:
+    """cron '*/10 23,0 * * *' UTC = KST 08:00~09:50 매 10분 sweep.
+
+    admin Settings 의 send_hour:send_minute 와 cli 시각 게이트 (±5분 윈도우)
+    가 매칭 시점만 통과. 자세한 흐름은 admin-send-schedule 피처 참조.
+    """
+    assert 'cron: "*/10 23,0 * * *"' in workflow_text
 
 
 def test_workflow_dispatch_with_dry_run_input(workflow_text: str) -> None:

@@ -6,19 +6,6 @@ from typing import Any
 import pytest
 
 from ai_news_scraping import cli
-
-
-@pytest.fixture(autouse=True)
-def _patch_now_kst_to_send_window(monkeypatch: pytest.MonkeyPatch) -> None:
-    """모든 cli 테스트가 시각 게이트를 통과하도록 KST 시각을 8:40 으로 고정.
-
-    SearchSettings 기본값 (send_hour=8, send_minute=40) 과 매칭 → 시각 게이트 OK.
-    신규 시각 게이트 테스트는 본인 monkeypatch.setattr 으로 override.
-    """
-    monkeypatch.setattr(
-        cli, "_now_kst",
-        lambda: datetime(2026, 5, 24, 8, 40, tzinfo=cli.KST),
-    )
 from ai_news_scraping.config import Settings
 from ai_news_scraping.domain_config import DomainConfig, Source
 from ai_news_scraping.pipeline import PipelineDeps, PipelineParams, PipelineResult
@@ -33,6 +20,19 @@ from ai_news_scraping.search_config_store import (
 )
 from ai_news_scraping.store import InMemoryArticleStore
 from ai_news_scraping.subscriber_store import InMemorySubscriberStore
+
+
+@pytest.fixture(autouse=True)
+def _patch_now_kst_to_send_window(monkeypatch: pytest.MonkeyPatch) -> None:
+    """모든 cli 테스트가 시각 게이트를 통과하도록 KST 시각을 8:40 으로 고정.
+
+    SearchSettings 기본값 (send_hour=8, send_minute=40) 과 매칭 → 시각 게이트 OK.
+    신규 시각 게이트 테스트는 본인 monkeypatch.setattr 으로 override.
+    """
+    monkeypatch.setattr(
+        cli, "_now_kst",
+        lambda: datetime(2026, 5, 24, 8, 40, tzinfo=cli.KST),
+    )
 
 
 def _make_settings(**overrides: Any) -> Settings:
