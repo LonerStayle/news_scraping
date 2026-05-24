@@ -68,7 +68,13 @@ class HttpSession(Protocol):
 
 
 def build_query(keyword: str, source_domains: list[str]) -> str:
-    """Brave 쿼리 — host 만 받는다. Brave ``site:`` 가 path 를 거부 (§9-8 함정)."""
+    """Brave 쿼리 — host 만 받는다.
+
+    ⚠️ HANDOFF.md §9-8 함정: Brave Search 의 ``site:`` 연산자는 host 만 허용.
+    ``site:openai.com/research`` 같은 path 포함 형태는 **422 Unprocessable Entity**
+    로 거부됨 (실제 사고: 2026-05-24). path 필터는 클라이언트 측 ``_matches_path_prefix``
+    에서 처리. 이 함수는 host 만 받음을 호출자 책임으로 가정.
+    """
     if not keyword.strip():
         raise ValueError("keyword must be non-empty")
     if not source_domains:

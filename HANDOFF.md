@@ -272,12 +272,12 @@ ai_news_scraping/
 - 대표님 `.env`: `gemini-3.5-flash` (실제 동작 확인됨)
 - Google AI Studio 가 "2.x deprecate" 안내 띄울 수 있음 — 그래도 당분간 동작
 
-### 9-8. Brave Search `site:` 는 **호스트만** — 경로 X (commit `7d85e69`)
+### 9-8. Brave Search `site:` 는 **호스트만** — 경로 X (코드 주석 + 클라이언트 필터로 흡수)
 
 - `site:openai.com` ✅ / `site:openai.com/research` ❌ → **422 Unprocessable Entity** 로 쿼리 전체 거부
-- 대표님이 admin Sources 에 `openai.com/research` 류 URL 을 넣어 3회 연속 강제발송이 `status=skipped` 로 끝나고 메일 미수신 (2026-05-24 사고)
-- 현재 코드 (`search_config_store._normalize_domain`) 는 path/scheme/port/query/공백 들어오면 즉시 `ValueError` — admin 폼이 400 으로 거절
-- ⚠️ **임시 안전장치**: 호스트만 강제 = 매체 안에서 분야 좁히기 불가 → §12 의 최우선 후보로 path-prefix 클라이언트 필터 도입 예정
+- 사고 이력: 대표님이 admin Sources 에 `openai.com/research` 류 URL 을 넣어 3회 연속 강제발송이 `status=skipped` 로 끝나고 메일 미수신 (2026-05-24)
+- **현재 정식 형태** (commits `7d85e69` → `T1~T7` 갱신): admin 입력은 **host 또는 host/path 둘 다 허용** 하되, Brave 호출 시점에 host 만 추출해 전달하고 클라이언트 측 `_matches_path_prefix` (search.py) 가 segment-aware 매칭으로 path 필터 적용. 스킴/포트/쿼리/공백 등은 여전히 400 reject.
+- search.py 의 `build_query` 함수 docstring 에 함정 명시 → 미래 누군가 "그냥 path 도 site: 에 통과시키자" 회귀 방지
 
 ---
 
@@ -353,7 +353,7 @@ CLAUDE.md §6 의 두 가지 원칙:
 
 | 우선순위 | 후보 | 작업량 |
 |---------|------|--------|
-| 🔥 ⭐⭐⭐⭐ | **매체 path-prefix 클라이언트 필터** (대표님 5/24 명시 요청) — 현재 host-only 는 임시. 매체 안에서 분야가 잘 안 잡힘 (예: `openai.com` 전체보다 `/research` / `/news` / `/blog` 만 노리고 싶음) | 아래 별도 섹션 |
+| ~~🔥 ⭐⭐⭐⭐~~ ✅ **완료** | ~~매체 path-prefix 클라이언트 필터~~ — 2026-05-24 구현 완료. commits `T1~T7`. admin Sources 폼에 host 또는 host/path 둘 다 입력 가능. | — |
 | ⭐⭐⭐ | runs.scheduled_at 또는 trigger 종류 (cron/admin/manual) 컬럼 추가 | 1 commit |
 | ⭐⭐ | History 탭에서 특정 run 의 article 목록 보기 (drill-down) | 2~3 commit |
 | ⭐⭐ | admin 페이지에 본인 메일 즉시 발송 (test recipient) 기능 | 1 commit |
@@ -364,7 +364,18 @@ CLAUDE.md §6 의 두 가지 원칙:
 
 ---
 
-### 12-A. 🔥 매체 path-prefix 필터 (최우선 — 대표님 5/24 명시 요청)
+### 12-A. ✅ 매체 path-prefix 필터 — 완료 (2026-05-24)
+
+**완료 commits**: T1 (`0117a93`) / T2 (`9949b86`) / T3 (`edfc65b`) / T4 (`e292b55`) / T5 (`a54d140`) / T6 (`7fababb`) / T7 (`5667cf8`).
+
+**최종 형태**:
+- admin Sources 입력 칸 1개. `openai.com` 또는 `openai.com/research/papers` 둘 다 OK
+- `search_config_store._split_host_path()` 가 host/path 분리, `_matches_path_prefix()` 가 segment-aware (`/research` ↔ `/researchers` false positive 차단)
+- `LoadedConfig.source_entries: list[SourceEntry]` 로 명시 분해. D5 (host-only 우선) 정책은 `source_name_map` 의 2-pass + `search()` 의 host_only 분기로 결정적
+- search 인자는 list[str] / list[SourceEntry] 둘 다 받음 (backwards compat 보존)
+- 마이그레이션 0004 불필요 — `search_sources.domain` 단일 컬럼 유지
+
+**아래는 원래 본 섹션의 구현 계획 — 이력 보존용으로 남김** (실제 구현은 docs/features/2026-05-24-search-path-prefix/ 폴더의 PRD + tech-design + plan + 변경이력 참조):
 
 **왜 필요한가** (대표님 원문):
 > "다음 고도화는 그 연산자도 언젠간 되게끔하는거야. 좁히지 않으니까 내가 원하는 분야가 잘 안 잡히네."
@@ -404,7 +415,7 @@ CLAUDE.md §6 의 두 가지 원칙:
 | BackgroundTasks 비동기 발송 | 강제발송 클릭 후 페이지 안 멈춤 + polling 으로 진행 표시 |
 | ADMIN_AUTH_ENABLED=false (로컬) | 1인 운영 / 외부 노출 X / 매번 비밀번호 입력 번거로움 |
 | dry-run 시 articles DB skip | 검증 환경이 운영 dedup 을 가리지 않도록 |
-| search_sources 호스트만 강제 (commit `7d85e69`) | Brave site: 가 path 거부 (422) — 자동 잘라내기 (매직) 대신 명시 reject 가 디버깅에 유리. ⚠️ **임시**: §12-A 로 path-prefix 클라이언트 필터 도입 예정 |
+| search_sources 호스트만 강제 (commit `7d85e69`) → path 도 허용으로 확장 (2026-05-24 T1~T7) | 1차: Brave site: 가 path 거부 (422) — 임시 안전장치로 reject. 2차: 단일 입력 칸 + 클라이언트 측 segment-aware 필터로 정식화. 마이그레이션 0 (단일 domain 컬럼 유지) + admin UX 단순성 보존. |
 
 ---
 
