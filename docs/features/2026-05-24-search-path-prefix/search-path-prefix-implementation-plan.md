@@ -28,7 +28,7 @@ commit_policy: per-task
 
 **Model**: sonnet
 
-- [ ] **Step 1: 실패 테스트 작성** — `tests/test_search_config_store.py` 에 추가
+- [x] **Step 1: 실패 테스트 작성** — `tests/test_search_config_store.py` 에 추가
 
 ```python
 def test_normalize_domain_allows_host_with_path() -> None:
@@ -55,14 +55,14 @@ def test_split_host_path_separates() -> None:
     )
 ```
 
-- [ ] **Step 2: 실패 확인**
+- [x] **Step 2: 실패 확인**
 
 ```bash
 make test 2>&1 | tail -5
 ```
 Expected: FAIL — `openai.com/research` reject 가 여전히 발동 + `_split_host_path` 부재.
 
-- [ ] **Step 3: 구현**
+- [x] **Step 3: 구현**
 
 **원본** (`src/ai_news_scraping/search_config_store.py:39-63`):
 ```python
@@ -143,14 +143,14 @@ def _split_host_path(domain: str) -> tuple[str, str]:
     return host, "/" + rest
 ```
 
-- [ ] **Step 4: 통과 확인**
+- [x] **Step 4: 통과 확인**
 
 ```bash
 make test 2>&1 | tail -5
 ```
 Expected: PASS — 새 케이스 + 기존 reject 케이스 모두 통과.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/ai_news_scraping/search_config_store.py tests/test_search_config_store.py
@@ -167,7 +167,7 @@ git commit -m "T1: _normalize_domain path 허용 + _split_host_path 헬퍼"
 
 **Model**: haiku
 
-- [ ] **Step 1: 실패 테스트 작성**
+- [x] **Step 1: 실패 테스트 작성**
 
 ```python
 def test_matches_path_prefix_segment_aware() -> None:
@@ -188,9 +188,9 @@ def test_matches_path_prefix_segment_aware() -> None:
     assert _matches_path_prefix("/news/x", "/research") is False
 ```
 
-- [ ] **Step 2: 실패 확인**: `pytest tests/test_search.py::test_matches_path_prefix_segment_aware -v` → FAIL (`_matches_path_prefix` 부재)
+- [x] **Step 2: 실패 확인**: `pytest tests/test_search.py::test_matches_path_prefix_segment_aware -v` → FAIL (`_matches_path_prefix` 부재)
 
-- [ ] **Step 3: 구현** — `src/ai_news_scraping/search.py` 의 `_clamp` 헬퍼 직전 또는 직후에 추가:
+- [x] **Step 3: 구현** — `src/ai_news_scraping/search.py` 의 `_clamp` 헬퍼 직전 또는 직후에 추가:
 
 **수정 후** (new helper, before `_clamp` at end of file):
 ```python
@@ -205,9 +205,9 @@ def _matches_path_prefix(url_path: str, prefix: str) -> bool:
     return url_path == norm or url_path.startswith(norm + "/")
 ```
 
-- [ ] **Step 4: 통과 확인**: `pytest tests/test_search.py::test_matches_path_prefix_segment_aware -v` → PASS
+- [x] **Step 4: 통과 확인**: `pytest tests/test_search.py::test_matches_path_prefix_segment_aware -v` → PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/ai_news_scraping/search.py tests/test_search.py
@@ -224,7 +224,7 @@ git commit -m "T2: _matches_path_prefix segment-aware 헬퍼"
 
 **Model**: sonnet
 
-- [ ] **Step 1: 실패 테스트 작성** — host/path 분해 검증
+- [x] **Step 1: 실패 테스트 작성** — host/path 분해 검증
 
 ```python
 def test_load_search_config_decomposes_source_entries() -> None:
@@ -245,9 +245,9 @@ def test_load_search_config_decomposes_source_entries() -> None:
     assert by_id[("openai.com", "/research")] == "OpenAI Research"
 ```
 
-- [ ] **Step 2: 실패 확인**: `pytest tests/test_search_config_loader.py -v` → FAIL (`source_entries` 부재)
+- [x] **Step 2: 실패 확인**: `pytest tests/test_search_config_loader.py -v` → FAIL (`source_entries` 부재)
 
-- [ ] **Step 3: 구현**
+- [x] **Step 3: 구현**
 
 **원본** (`src/ai_news_scraping/search_config_loader.py:21-68`):
 ```python
@@ -388,9 +388,9 @@ def load_search_config(
     )
 ```
 
-- [ ] **Step 4: 통과 확인**: `pytest tests/test_search_config_loader.py -v` → PASS
+- [x] **Step 4: 통과 확인**: `pytest tests/test_search_config_loader.py -v` → PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/ai_news_scraping/search_config_loader.py tests/test_search_config_loader.py
@@ -407,7 +407,7 @@ git commit -m "T3: SourceEntry + LoadedConfig.source_entries 분해"
 
 **Model**: sonnet
 
-- [ ] **Step 1: 실패 테스트 작성** — 통합 mock 1개로 D5 (넓은 우선) + segment-aware 동시 검증
+- [x] **Step 1: 실패 테스트 작성** — 통합 mock 1개로 D5 (넓은 우선) + segment-aware 동시 검증
 
 ```python
 def test_search_filters_by_path_prefix_and_dedups_host_for_brave() -> None:
@@ -451,9 +451,9 @@ def test_search_filters_by_path_prefix_and_dedups_host_for_brave() -> None:
     assert "https://openai.com/researchers/team" not in urls
 ```
 
-- [ ] **Step 2: 실패 확인**: 시그니처 변경 + 필터 부재로 FAIL
+- [x] **Step 2: 실패 확인**: 시그니처 변경 + 필터 부재로 FAIL
 
-- [ ] **Step 3: 구현**
+- [x] **Step 3: 구현**
 
 **원본** (`src/ai_news_scraping/search.py:70-140`):
 ```python
@@ -648,9 +648,9 @@ def search(
     return results
 ```
 
-- [ ] **Step 4: 통과 확인**: `pytest tests/test_search.py -v` → PASS (신규 + 기존 회귀 0)
+- [x] **Step 4: 통과 확인**: `pytest tests/test_search.py -v` → PASS (신규 + 기존 회귀 0)
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/ai_news_scraping/search.py tests/test_search.py
@@ -668,11 +668,11 @@ git commit -m "T4: search() host dedup + path-prefix segment-aware 필터"
 
 **Model**: sonnet
 
-- [ ] **Step 1: 실패 테스트** — `test_pipeline.py` 가 새 시그니처로 `source_entries` 전달하도록 fixture 변경. 기존 fixture 의 `source_domains=["a.com"]` 부분을 `source_entries=[SourceEntry(host="a.com", path_prefix="", name="A")]` 로 마이그레이션.
+- [x] **Step 1: 실패 테스트** — `test_pipeline.py` 가 새 시그니처로 `source_entries` 전달하도록 fixture 변경. 기존 fixture 의 `source_domains=["a.com"]` 부분을 `source_entries=[SourceEntry(host="a.com", path_prefix="", name="A")]` 로 마이그레이션.
 
-- [ ] **Step 2: 실패 확인**: `pytest tests/test_pipeline.py -v` → FAIL (param 명 mismatch)
+- [x] **Step 2: 실패 확인**: `pytest tests/test_pipeline.py -v` → FAIL (param 명 mismatch)
 
-- [ ] **Step 3: 구현**
+- [x] **Step 3: 구현**
 
 `pipeline.py` 의 `PipelineParams`:
 - **원본** (해당 필드 부근):
@@ -726,9 +726,9 @@ git commit -m "T4: search() host dedup + path-prefix segment-aware 필터"
 
 `cli.py` 의 `source_name_map` 사용처는 `loaded.source_name_map` property 가 그대로 호환 제공 → 추가 변경 불필요.
 
-- [ ] **Step 4: 통과 확인**: `pytest tests/test_pipeline.py tests/test_search.py -v` → PASS
+- [x] **Step 4: 통과 확인**: `pytest tests/test_pipeline.py tests/test_search.py -v` → PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/ai_news_scraping/pipeline.py src/ai_news_scraping/cli.py tests/test_pipeline.py
@@ -745,7 +745,7 @@ git commit -m "T5: PipelineParams.source_entries + caller (pipeline/cli) 갱신"
 
 **Model**: haiku
 
-- [ ] **Step 1: 실패 테스트** — admin GET / 가 정상 응답 + 새 안내 텍스트 substring 포함
+- [x] **Step 1: 실패 테스트** — admin GET / 가 정상 응답 + 새 안내 텍스트 substring 포함
 
 ```python
 def test_admin_sources_form_shows_path_hint() -> None:
@@ -755,9 +755,9 @@ def test_admin_sources_form_shows_path_hint() -> None:
     assert "또는 도메인+경로" in response.text  # 신규 안내
 ```
 
-- [ ] **Step 2: 실패 확인**: 안내 텍스트 부재로 FAIL
+- [x] **Step 2: 실패 확인**: 안내 텍스트 부재로 FAIL
 
-- [ ] **Step 3: 구현**
+- [x] **Step 3: 구현**
 
 **원본** (`templates/admin.html:462-471`):
 ```html
@@ -788,9 +788,9 @@ def test_admin_sources_form_shows_path_hint() -> None:
     </form>
 ```
 
-- [ ] **Step 4: 통과 확인**: `pytest tests/test_admin.py -v` → PASS
+- [x] **Step 4: 통과 확인**: `pytest tests/test_admin.py -v` → PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add templates/admin.html tests/test_admin.py
@@ -806,7 +806,7 @@ git commit -m "T6: admin Sources 폼 안내 갱신 + pattern 에 path 허용"
 
 **Model**: sonnet
 
-- [ ] **Step 1: AC 각각 1개씩 mock 통합 테스트 작성**
+- [x] **Step 1: AC 각각 1개씩 mock 통합 테스트 작성**
 
 ```python
 def test_AC1_host_only_lets_all_through() -> None:
@@ -827,13 +827,13 @@ def test_AC5_existing_host_only_row_unchanged() -> None:
     """AC-5: 기존 host-only row 동작 회귀 0 — yaml seed 호환"""
 ```
 
-- [ ] **Step 2: 실패 확인**: 새 mock 테스트 동작 검증
+- [x] **Step 2: 실패 확인**: 새 mock 테스트 동작 검증
 
-- [ ] **Step 3: 구현** — 위 5 테스트가 동작하도록 (대부분 fixture 작성 + 기존 search/admin 활용)
+- [x] **Step 3: 구현** — 위 5 테스트가 동작하도록 (대부분 fixture 작성 + 기존 search/admin 활용)
 
-- [ ] **Step 4: 통과 확인**: 전체 `make test` PASS
+- [x] **Step 4: 통과 확인**: 전체 `make test` PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add tests/
@@ -851,10 +851,10 @@ git commit -m "T7: AC-1..5 end-to-end 통합 검증"
 
 **Model**: sonnet
 
-- [ ] **Step 1**: HANDOFF.md §9-8 / §12 / §12-A / §13 갱신 (운영 문서 동기화)
-- [ ] **Step 2**: `search.py` 의 build_query 직전에 한 줄 주석 — "Brave site: 는 host 만 (§9-8). path 는 클라이언트 _matches_path_prefix 로."
-- [ ] **Step 3**: `make check` 전체 통과 확인
-- [ ] **Step 4: Commit**
+- [x] **Step 1**: HANDOFF.md §9-8 / §12 / §12-A / §13 갱신 (운영 문서 동기화)
+- [x] **Step 2**: `search.py` 의 build_query 직전에 한 줄 주석 — "Brave site: 는 host 만 (§9-8). path 는 클라이언트 _matches_path_prefix 로."
+- [x] **Step 3**: `make check` 전체 통과 확인
+- [x] **Step 4: Commit**
 
 ```bash
 git add HANDOFF.md src/ai_news_scraping/search.py
@@ -869,9 +869,9 @@ git commit -m "T8: HANDOFF 갱신 + §9-8 함정 주석"
 
 **Model**: haiku
 
-- [ ] **Step 1**: `make check` (lint + typecheck + test) → 모두 exit 0
-- [ ] **Step 2**: 실패 시 회귀 케이스 grep 으로 식별 (T1~T8 어디 영향 확인)
-- [ ] **Step 3**: 모두 통과 시 PROJECT_DONE 외칠 필요는 없으나 plan 모든 task `[x]` 마킹
+- [x] **Step 1**: `make check` (lint + typecheck + test) → 모두 exit 0
+- [x] **Step 2**: 실패 시 회귀 케이스 grep 으로 식별 (T1~T8 어디 영향 확인)
+- [x] **Step 3**: 모두 통과 시 PROJECT_DONE 외칠 필요는 없으나 plan 모든 task `[x]` 마킹
 
 (별도 commit 불필요 — 직전 task commit 이 최종 상태)
 
@@ -908,3 +908,29 @@ git commit -m "T8: HANDOFF 갱신 + §9-8 함정 주석"
 - **무엇이**: search-path-prefix-implementation-plan.md 전체 — Task 1 (_normalize_domain `/` 허용 + _split_host_path), Task 2 (_matches_path_prefix segment-aware), Task 3 (SourceEntry + LoadedConfig.source_entries + D5 source_name_map property), Task 4 (search() host dedup + path-prefix 필터), Task 5 (pipeline + cli caller wave), Task 6 (admin Sources 폼 안내 + pattern), Task 7 (AC-1..5 end-to-end 통합), Task 8 (HANDOFF + §9-8 주석), Task 9 (make check). §2 위험 코드 지점 5건 + §3 롤백 전략.
 - **영향범위**: 없음 (최초 생성). PRD (CH-20260524-001) + tech-design (CH-20260524-002) 와 cross-link.
 - **연관 항목**: CH-20260524-001, CH-20260524-002
+
+### [2026-05-24 10:55] [코드-수정] (batch: tasks T1..T8)
+- **id**: CH-20260524-004
+- **이유**: search-path-prefix 구현계획 T1~T8 일괄 실행 — admin 단일 입력 칸으로 host 또는 host/path 둘 다 허용, segment-aware 클라이언트 측 path-prefix 필터로 매체 안 분야 좁히기 가능. 마이그레이션 0 (단일 domain 컬럼 유지).
+- **무엇이**: src/ai_news_scraping/search_config_store.py, src/ai_news_scraping/search.py, src/ai_news_scraping/search_config_loader.py, src/ai_news_scraping/pipeline.py, src/ai_news_scraping/cli.py, templates/admin.html, HANDOFF.md, tests/test_search_config_store.py, tests/test_search.py, tests/test_search_config_loader.py, tests/test_pipeline.py, tests/test_pipeline_smoke.py, tests/test_cli.py, tests/test_search_path_prefix_ac.py (신규)
+- **영향범위**: search 흐름 전체 — store → loader → search → pipeline → cli → admin 6단 + 268 → 284 tests (+16 신규). Backwards compat 으로 list[str] 입력도 host-only SourceEntry 로 자동 변환.
+- **위험 카테고리**: breaking, side-effect — `_normalize_domain` 의 `/` reject 정책 해제 + `search()` 시그니처 변경 (caller wave 동시 갱신). segment-aware 매칭 누락 시 `/research` ↔ `/researchers` false positive 위험은 test_search_path_prefix_ac 의 D5 케이스로 차단.
+- **task별 세부 (8건)**:
+  - Task 1: `src/.../search_config_store.py:39-100` — `_normalize_domain` path 허용 + `_split_host_path` 헬퍼 (`breaking`) — commit: `0117a93`
+  - Task 2: `src/.../search.py` — `_matches_path_prefix` segment-aware 헬퍼 (`none`) — commit: `9949b86`
+  - Task 3: `src/.../search_config_loader.py` — `SourceEntry` + `LoadedConfig.source_entries` + `source_domains`/`source_name_map` property (D5 넓은 우선) (`side-effect`) — commit: `edfc65b`
+  - Task 4: `src/.../search.py:70-180` — `search()` host dedup + path-prefix 필터 통합 + `_coerce_to_entries` backwards compat (`breaking`) — commit: `e292b55`
+  - Task 5: `src/.../pipeline.py`, `src/.../cli.py`, test fixtures — `PipelineParams.source_entries` + caller wave (`breaking`) — commit: `a54d140`
+  - Task 6: `templates/admin.html:462-475` — Sources 폼 안내 + `pattern` 갱신 (host 또는 host/path) (`none`) — commit: `7fababb`
+  - Task 7: `tests/test_search_path_prefix_ac.py` (신규) — AC-1..5 + D5 1:1 mapping 회귀 게이트 (`none`) — commit: `5667cf8`
+  - Task 8: `HANDOFF.md`, `src/.../search.py` build_query docstring — §9-8 함정 정식화 + §12-A 완료 마킹 (`none`) — commit: `680eb1a`
+- **연관 commits**: `0117a93..680eb1a` (8 commits)
+- **변경 전/후 코드**: 생략 — `git show <SHA>` 로 조회 (commit_policy=per-task)
+- **연관 항목**: CH-20260524-001, CH-20260524-002, CH-20260524-003
+
+### [2026-05-24 10:55] [검증]
+- **id**: CH-20260524-005
+- **이유**: T9 `make check` 전체 검증 — lint + typecheck + test 모두 exit 0
+- **무엇이**: `uv run ruff check .` (All checks passed) / `uv run mypy` (Success: no issues found in 38 source files) / `uv run pytest` (284 passed in 4.37s)
+- **결과**: PASS — 268 → 284 (+16) 회귀 0
+- **연관 commit**: HEAD = `680eb1a`
