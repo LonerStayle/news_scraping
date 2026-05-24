@@ -206,6 +206,81 @@ def test_search_count_clamped_to_max() -> None:
     assert session.calls[0]["params"]["count"] == BRAVE_MAX_COUNT
 
 
+def test_search_filters_by_path_prefix_and_dedups_host() -> None:
+    """3 row (host-only X + /research + /news) → Brave 에는 site:openai.com 1번만 /
+    결과 필터는 row 별 path_prefix 매칭 + segment-aware."""
+    from ai_news_scraping.search_config_loader import SourceEntry
+
+    session = FakeSession({"web": {"results": [
+        {"url": "https://openai.com/research/papers/2026/new-reasoning-paper",
+         "title": "Paper", "description": "...",
+         "meta_url": {"hostname": "openai.com"}},
+        {"url": "https://openai.com/news/funding-round-details-2026",
+         "title": "News", "description": "...",
+         "meta_url": {"hostname": "openai.com"}},
+        {"url": "https://openai.com/researchers/team-page-overview",  # segment false positive 후보
+         "title": "Team", "description": "...",
+         "meta_url": {"hostname": "openai.com"}},
+        {"url": "https://openai.com/blog/general-update-spring-2026",  # 어느 prefix 도 안 매치
+         "title": "Blog", "description": "...",
+         "meta_url": {"hostname": "openai.com"}},
+    ]}})
+
+    entries = [
+        SourceEntry(host="openai.com", path_prefix="/research", name="OpenAI Research"),
+        SourceEntry(host="openai.com", path_prefix="/news", name="OpenAI News"),
+    ]
+    results = search("AI", entries, api_key="K", session=session)
+
+    # Brave 쿼리에 site:openai.com 이 1번만 들어가야 (host dedup)
+    q = session.calls[0]["params"]["q"]
+    assert q.count("site:openai.com") == 1
+
+    # 결과: /research/... + /news/... 통과, /researchers/... 차단 (segment), /blog/... 차단
+    urls = {r.url for r in results}
+    assert "https://openai.com/research/papers/2026/new-reasoning-paper" in urls
+    assert "https://openai.com/news/funding-round-details-2026" in urls
+    assert "https://openai.com/researchers/team-page-overview" not in urls
+    assert "https://openai.com/blog/general-update-spring-2026" not in urls
+
+
+def test_search_host_only_row_lets_all_segments_through() -> None:
+    """host-only row 면 path 무관 모두 통과 (FR-2)."""
+    from ai_news_scraping.search_config_loader import SourceEntry
+
+    session = FakeSession({"web": {"results": [
+        {"url": "https://openai.com/research/papers/some-new-paper-xyz",
+         "title": "T1", "description": "...",
+         "meta_url": {"hostname": "openai.com"}},
+        {"url": "https://openai.com/news/funding-round-news-spring",
+         "title": "T2", "description": "...",
+         "meta_url": {"hostname": "openai.com"}},
+        {"url": "https://openai.com/blog/general-update-spring-2026",
+         "title": "T3", "description": "...",
+         "meta_url": {"hostname": "openai.com"}},
+    ]}})
+    entries = [SourceEntry(host="openai.com", path_prefix="", name="OpenAI")]
+    results = search("AI", entries, api_key="K", session=session)
+    assert len(results) == 3
+
+
+def test_search_host_only_takes_priority_over_path_row() -> None:
+    """D5: 같은 host 에 host-only row + path row 가 공존하면 host-only 가 우선 — 모두 통과."""
+    from ai_news_scraping.search_config_loader import SourceEntry
+
+    session = FakeSession({"web": {"results": [
+        {"url": "https://openai.com/blog/general-update-from-team/",
+         "title": "T", "description": "...",
+         "meta_url": {"hostname": "openai.com"}},
+    ]}})
+    entries = [
+        SourceEntry(host="openai.com", path_prefix="/research", name="Research"),
+        SourceEntry(host="openai.com", path_prefix="", name="OpenAI (전체)"),  # host-only
+    ]
+    results = search("AI", entries, api_key="K", session=session)
+    assert len(results) == 1  # /blog/... 가 host-only 로 통과 (path row 만 있었으면 차단)
+
+
 def test_search_count_clamped_to_min() -> None:
     session = FakeSession({"web": {"results": []}})
     search("AI", ["a.com"], api_key="k", num=0, session=session)

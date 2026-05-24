@@ -68,6 +68,7 @@ class HttpSession(Protocol):
 
 
 def build_query(keyword: str, source_domains: list[str]) -> str:
+    """Brave 쿼리 — host 만 받는다. Brave ``site:`` 가 path 를 거부 (§9-8 함정)."""
     if not keyword.strip():
         raise ValueError("keyword must be non-empty")
     if not source_domains:
@@ -76,31 +77,62 @@ def build_query(keyword: str, source_domains: list[str]) -> str:
     return f'"{keyword}" ({sites})'
 
 
+def _coerce_to_entries(raw: list[Any]) -> list[Any]:
+    """호환층: ``list[str]`` 입력은 host-only ``SourceEntry`` 로 변환.
+
+    기존 caller (pipeline 등) 가 host 리스트만 전달해도 동작. 새 caller 는
+    ``SourceEntry`` (host/path_prefix/name) 묶음을 직접 전달.
+    """
+    if not raw:
+        return raw
+    if isinstance(raw[0], str):
+        # Late import — search_config_loader 가 SourceEntry 를 export. 순환 없음.
+        from .search_config_loader import SourceEntry
+
+        return [SourceEntry(host=str(d), path_prefix="", name=str(d)) for d in raw]
+    return raw
+
+
 def search(
     keyword: str,
-    source_domains: list[str],
+    source_entries: list[Any],
     *,
     api_key: str,
     num: int = DEFAULT_COUNT,
     freshness: str = DEFAULT_FRESHNESS,
     session: HttpSession | None = None,
 ) -> list[SearchResult]:
-    """One Brave Search call → whitelisted SearchResult list.
+    """One Brave Search call → path-prefix filtered SearchResult list.
 
-    - ``freshness="pd"`` (past day) = "최신순" 축. ``pw`` / ``pm`` / ``py``
-      또는 ISO 날짜 범위 지원.
-    - Brave 의 ``meta_url.hostname`` 으로 화이트리스트 재필터 — 검색엔진이
-      site: 필터 안에서 가끔 다른 도메인을 섞어주는 케이스 방어.
+    - Brave 쿼리는 host 만 dedup 해 1회 호출 (§9-8 함정 회피).
+    - 응답을 받은 후 클라이언트 측에서 row 단위 path-prefix segment-aware 매칭.
+    - 같은 host 에 host-only row 와 path row 가 공존하면 host-only 가 우선 (D5).
+
+    Backwards compat: ``source_entries`` 가 ``list[str]`` 이면 host-only entries
+    로 자동 변환 — 기존 caller 가 host 리스트만 전달해도 동작 변경 없음.
     """
     sess: HttpSession = (
         session if session is not None else cast(HttpSession, requests.Session())
     )
+    entries = _coerce_to_entries(source_entries)
+    if not entries:
+        raise ValueError("source_entries must be non-empty")
+
+    # host dedup — 같은 host 의 row 가 여럿이라도 Brave 호출은 1번.
+    hosts: list[str] = []
+    seen: set[str] = set()
+    for e in entries:
+        h = e.host.lower().removeprefix("www.")
+        if h not in seen:
+            seen.add(h)
+            hosts.append(h)
+
     headers: dict[str, str] = {
         "X-Subscription-Token": api_key,
         "Accept": "application/json",
     }
     params: dict[str, Any] = {
-        "q": build_query(keyword, source_domains),
+        "q": build_query(keyword, hosts),
         "count": _clamp(num, 1, BRAVE_MAX_COUNT),
         "freshness": freshness,
     }
@@ -114,20 +146,36 @@ def search(
     payload: dict[str, Any] = resp.json()
     items: list[dict[str, Any]] = (payload.get("web") or {}).get("results") or []
 
-    whitelist = {d.lower() for d in source_domains}
+    # host → 그 host 에 매핑된 entries 들 (다양한 path_prefix).
+    host_to_entries: dict[str, list[Any]] = {}
+    for e in entries:
+        h = e.host.lower().removeprefix("www.")
+        host_to_entries.setdefault(h, []).append(e)
+
     results: list[SearchResult] = []
     for item in items:
         link: str = item.get("url", "")
+        if not link:
+            continue
         hostname = str(
-            (item.get("meta_url") or {}).get("hostname")
-            or _domain_of(link)
-        ).lower()
-        # `meta_url.hostname` 은 종종 "www." prefix 포함 — 화이트리스트 매칭 위해 제거
-        hostname = hostname.removeprefix("www.")
-        if not link or hostname not in whitelist:
+            (item.get("meta_url") or {}).get("hostname") or _domain_of(link)
+        ).lower().removeprefix("www.")
+        host_entries = host_to_entries.get(hostname)
+        if not host_entries:
             continue
         if not _looks_like_article_url(link):
             continue  # 카테고리/홈페이지/인덱스 페이지 차단
+
+        # path-prefix 매칭 — host-only row (path_prefix == "") 우선 (D5).
+        url_path = urlparse(link).path
+        host_only = next((e for e in host_entries if e.path_prefix == ""), None)
+        matched = host_only or next(
+            (e for e in host_entries if _matches_path_prefix(url_path, e.path_prefix)),
+            None,
+        )
+        if matched is None:
+            continue
+
         results.append(
             SearchResult(
                 url=link,
