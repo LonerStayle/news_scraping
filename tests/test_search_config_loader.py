@@ -3,6 +3,7 @@ from __future__ import annotations
 from ai_news_scraping.domain_config import DomainConfig, Source
 from ai_news_scraping.search_config_loader import (
     LoadedConfig,
+    SourceEntry,
     load_search_config,
 )
 from ai_news_scraping.search_config_store import (
@@ -99,6 +100,56 @@ def test_settings_always_from_db() -> None:
     )
     assert cfg.settings.freshness == "pm"
     assert cfg.settings.min_body_len == 400
+
+
+def test_load_search_config_decomposes_source_entries() -> None:
+    """SourceEntry 분해 — host+path row 를 host/path/name 으로 깨끗하게 나눈다."""
+    kw = InMemoryKeywordStore()
+    kw.add("AI")
+    src = InMemorySourceStore()
+    src.add("openai.com", "OpenAI Blog")
+    src.add("openai.com/research", "OpenAI Research")
+    src.add("techcrunch.com", "TechCrunch")
+
+    loaded = load_search_config(kw, src, InMemorySettingsStore())
+    entries = loaded.source_entries
+    assert SourceEntry(host="openai.com", path_prefix="", name="OpenAI Blog") in entries
+    assert SourceEntry(
+        host="openai.com", path_prefix="/research", name="OpenAI Research"
+    ) in entries
+    assert SourceEntry(host="techcrunch.com", path_prefix="", name="TechCrunch") in entries
+
+
+def test_loaded_config_source_domains_dedups_host() -> None:
+    """source_domains property 는 host 만 dedup. 같은 host 의 다른 prefix 는 1번만."""
+    src = InMemorySourceStore()
+    src.add("openai.com", "Blog")
+    src.add("openai.com/research", "Research")
+    src.add("openai.com/news", "News")
+    src.add("techcrunch.com", "TC")
+
+    loaded = load_search_config(
+        InMemoryKeywordStore(),
+        src,
+        InMemorySettingsStore(),
+        fallback=_yaml(),  # keywords 채워야 entries 가 안 비음
+    )
+    assert loaded.source_domains == ["openai.com", "techcrunch.com"]
+
+
+def test_loaded_config_source_name_map_prefers_host_only_row() -> None:
+    """D5: 같은 host 에 host-only row + path row 가 공존하면 host-only 의 name 이 우선."""
+    src = InMemorySourceStore()
+    src.add("openai.com/research", "Research")  # 먼저 추가
+    src.add("openai.com", "Blog (대표)")  # host-only 가 우선해야
+
+    loaded = load_search_config(
+        InMemoryKeywordStore(),
+        src,
+        InMemorySettingsStore(),
+        fallback=_yaml(),
+    )
+    assert loaded.source_name_map["openai.com"] == "Blog (대표)"
 
 
 def test_loaded_config_is_frozen() -> None:
