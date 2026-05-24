@@ -245,6 +245,8 @@ def create_app(
         num_results_per_keyword: Annotated[int | None, Form()] = None,
         max_articles_for_summary: Annotated[int | None, Form()] = None,
         min_body_len: Annotated[int | None, Form()] = None,
+        send_hour: Annotated[int | None, Form()] = None,
+        send_minute: Annotated[int | None, Form()] = None,
     ) -> RedirectResponse:
         if settings_store is None:
             raise HTTPException(status_code=503, detail="settings store not configured")
@@ -254,6 +256,8 @@ def create_app(
                 num_results_per_keyword=num_results_per_keyword,
                 max_articles_for_summary=max_articles_for_summary,
                 min_body_len=min_body_len,
+                send_hour=send_hour,
+                send_minute=send_minute,
             )
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e)) from e

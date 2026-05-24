@@ -413,6 +413,68 @@ def test_settings_renders_in_index(ctx: AdminCtx) -> None:
     assert 'value="pm"' in resp.text
 
 
+def test_settings_update_send_time(ctx: AdminCtx) -> None:
+    resp = ctx.client.post(
+        "/settings", auth=AUTH,
+        data={"send_hour": "9", "send_minute": "15"},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 303
+    cur = ctx.settings_store.get()
+    assert cur.send_hour == 9
+    assert cur.send_minute == 15
+    # 다른 필드 유지
+    assert cur.freshness == "pw"
+
+
+def test_settings_invalid_send_hour_returns_400(ctx: AdminCtx) -> None:
+    for bad in ("24", "-1", "99"):
+        resp = ctx.client.post(
+            "/settings", auth=AUTH,
+            data={"send_hour": bad, "send_minute": "0"},
+            follow_redirects=False,
+        )
+        assert resp.status_code == 400, f"send_hour={bad} should reject"
+
+
+def test_settings_invalid_send_minute_returns_400(ctx: AdminCtx) -> None:
+    for bad in ("60", "-1", "99"):
+        resp = ctx.client.post(
+            "/settings", auth=AUTH,
+            data={"send_hour": "8", "send_minute": bad},
+            follow_redirects=False,
+        )
+        assert resp.status_code == 400, f"send_minute={bad} should reject"
+
+
+def test_settings_send_time_partial_preserves_other(ctx: AdminCtx) -> None:
+    ctx.client.post(
+        "/settings", auth=AUTH,
+        data={"send_hour": "10"},
+        follow_redirects=False,
+    )
+    cur = ctx.settings_store.get()
+    assert cur.send_hour == 10
+    assert cur.send_minute == 40  # 기본값 유지
+
+
+def test_overview_shows_send_time(ctx: AdminCtx) -> None:
+    ctx.settings_store.update(send_hour=9, send_minute=15)
+    resp = ctx.client.get("/", auth=AUTH)
+    assert resp.status_code == 200
+    # Overview 카드의 "발송 시각" 라인에 "09:15 KST" 표시
+    assert "발송 시각" in resp.text
+    assert "09:15 KST" in resp.text
+
+
+def test_settings_form_has_send_time_inputs(ctx: AdminCtx) -> None:
+    resp = ctx.client.get("/", auth=AUTH)
+    assert resp.status_code == 200
+    # Settings 폼의 send_hour / send_minute input 존재
+    assert 'name="send_hour"' in resp.text
+    assert 'name="send_minute"' in resp.text
+
+
 def test_settings_route_503_when_store_missing() -> None:
     app = create_app(
         admin_token=ADMIN_TOKEN,

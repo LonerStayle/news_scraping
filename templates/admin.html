@@ -414,6 +414,7 @@
         <tr><td>키워드</td><td><strong>{{ keywords|length }}개</strong> ({{ keywords|selectattr("active")|list|length }} active)</td></tr>
         <tr><td>매체</td><td><strong>{{ sources|length }}개</strong> ({{ sources|selectattr("active")|list|length }} active)</td></tr>
         {% if settings %}
+        <tr><td>발송 시각</td><td><strong>{{ "%02d"|format(settings.send_hour) }}:{{ "%02d"|format(settings.send_minute) }} KST</strong> (cron 매 10분 ±5분 윈도우)</td></tr>
         <tr><td>freshness</td><td><code>{{ settings.freshness }}</code></td></tr>
         <tr><td>키워드당 결과 수</td><td>{{ settings.num_results_per_keyword }}</td></tr>
         <tr><td>요약 입력 max</td><td>{{ settings.max_articles_for_summary }}건</td></tr>
@@ -533,6 +534,15 @@
           <label for="min_body_len">최소 본문 길이 (50-5000자)</label>
           <input type="number" name="min_body_len" id="min_body_len" min="50" max="5000" value="{{ settings.min_body_len }}">
           <div class="hint">짧은 본문 skip (paywall 방어).</div>
+        </div>
+        <div class="field">
+          <label>발송 시각 (KST)</label>
+          <div class="time-row">
+            <input type="number" name="send_hour" min="0" max="23" value="{{ settings.send_hour }}" required style="width: 5rem;">
+            <span style="font-weight: 600; color: var(--accent);">:</span>
+            <input type="number" name="send_minute" min="0" max="59" value="{{ settings.send_minute }}" required style="width: 5rem;">
+          </div>
+          <div class="hint">GitHub Actions cron 이 KST 08:00~09:50 사이 매 10분 trigger 되며 이 시각 ±5분 윈도우에서만 발송. 변경 즉시 반영.</div>
         </div>
       </div>
       <button type="submit" class="primary">저장</button>
