@@ -460,11 +460,12 @@
   <section class="panel" id="sources">
     <h2>매체 화이트리스트 ({{ sources|length }}개, active {{ sources|selectattr("active")|list|length }}개)</h2>
     <p class="hint" style="color: var(--muted); font-size: 0.85rem; margin: 0 0 0.5rem 0;">
-      ⚠️ <strong>도메인만 입력</strong>해 주십시오 (예: <code>openai.com</code>). 경로/스킴/포트 포함 시
-      Brave Search 의 <code>site:</code> 연산자가 거부 (422) → 발송 0건.
+      ℹ️ <strong>도메인만</strong> (예: <code>openai.com</code>) <strong>또는 도메인+경로</strong>
+      (예: <code>openai.com/research</code>) 둘 다 입력 가능. 도메인만 적으면 매체 전체에서, 경로까지
+      적으면 그 경로로 시작하는 결과만 통과합니다. 스킴/포트/쿼리는 불가.
     </p>
     <form class="add-form" method="post" action="/sources">
-      <input type="text" name="domain" required placeholder="domain (예: techcrunch.com)" pattern="[a-z0-9.\-]+\.[a-z]{2,}">
+      <input type="text" name="domain" required placeholder="예: openai.com 또는 openai.com/research" pattern="[a-z0-9.\-]+\.[a-z]{2,}(/[a-zA-Z0-9._\-/]+)?">
       <input type="text" name="name" required placeholder="이름 (예: TechCrunch)">
       <input type="text" name="description" placeholder="설명 (선택)">
       <button type="submit" class="primary">추가</button>
