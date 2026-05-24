@@ -265,7 +265,7 @@ def build_params(
     s = loaded.settings
     return PipelineParams(
         keywords=list(loaded.keywords),
-        source_domains=list(loaded.source_domains),
+        source_entries=list(loaded.source_entries),
         subscribers=subscribers,
         brave_search_api_key=settings.brave_search_api_key,
         gemini_api_key=settings.gemini_api_key,

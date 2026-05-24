@@ -53,10 +53,13 @@ def _make_loaded(
     name_map: dict[str, str] | None = None,
     settings: SearchSettings | None = None,
 ) -> LoadedConfig:
+    from ai_news_scraping.search_config_loader import SourceEntry
+    d_list = domains if domains is not None else ["a.com", "b.com"]
+    nm = name_map if name_map is not None else {"a.com": "A", "b.com": "B"}
+    entries = [SourceEntry(host=d, path_prefix="", name=nm.get(d, d)) for d in d_list]
     return LoadedConfig(
         keywords=keywords if keywords is not None else ["kw1", "kw2"],
-        source_domains=domains if domains is not None else ["a.com", "b.com"],
-        source_name_map=name_map if name_map is not None else {"a.com": "A", "b.com": "B"},
+        source_entries=entries,
         settings=settings if settings is not None else SearchSettings(),
     )
 
@@ -116,7 +119,7 @@ def test_build_params_maps_fields_from_loaded_config() -> None:
         dry_run=True,
     )
     assert params.keywords == ["kw1", "kw2"]
-    assert params.source_domains == ["a.com", "b.com"]
+    assert [e.host for e in params.source_entries] == ["a.com", "b.com"]
     assert params.source_name_map == {"a.com": "A", "b.com": "B"}
     assert params.subscribers == ["x@x.com", "y@x.com"]
     assert params.brave_search_api_key == "BSK"
@@ -196,7 +199,7 @@ def test_run_command_happy_path() -> None:
     )
     assert rc == 0
     assert captured["params"].keywords == ["db-kw"]  # DB 우선
-    assert captured["params"].source_domains == ["db.com"]
+    assert [e.host for e in captured["params"].source_entries] == ["db.com"]
     assert captured["deps"].store is article_store
 
 
@@ -223,7 +226,7 @@ def test_run_command_uses_yaml_fallback_when_db_empty() -> None:
         pipeline_runner=fake_runner,
     )
     assert captured["params"].keywords == ["kw1", "kw2"]
-    assert captured["params"].source_domains == ["a.com", "b.com"]
+    assert [e.host for e in captured["params"].source_entries] == ["a.com", "b.com"]
 
 
 def test_run_command_skips_when_scrape_disabled() -> None:

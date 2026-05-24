@@ -26,7 +26,7 @@ def _now() -> datetime:
 def _params(**overrides: Any) -> PipelineParams:
     defaults: dict[str, Any] = {
         "keywords": ["kw1"],
-        "source_domains": ["a.com"],
+        "source_entries": ["a.com"],  # str list — search 가 host-only entries 로 자동 변환
         "subscribers": ["x@x.com"],
         "brave_search_api_key": "BSK",
         "gemini_api_key": "G",
@@ -76,7 +76,7 @@ class FakeSearchFn:
     def __call__(
         self,
         keyword: str,
-        source_domains: list[str],
+        source_entries: list[Any],
         *,
         api_key: str,
         num: int = 10,
@@ -84,7 +84,7 @@ class FakeSearchFn:
     ) -> list[SearchResult]:
         self.calls.append({
             "keyword": keyword,
-            "source_domains": source_domains,
+            "source_entries": source_entries,
             "num": num,
             "freshness": freshness,
         })

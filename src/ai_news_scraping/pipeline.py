@@ -20,6 +20,7 @@ import uuid
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from typing import Any
 
 from . import extract as extract_mod
 from . import mail as mail_mod
@@ -37,7 +38,9 @@ logger = logging.getLogger(__name__)
 @dataclass(frozen=True)
 class PipelineParams:
     keywords: list[str]
-    source_domains: list[str]
+    # search 의 host+path_prefix entries. search 가 list[str] 호환 (host-only entries
+    # 로 자동 변환) 라 caller 가 host 리스트만 전달해도 동작.
+    source_entries: list[Any]
     subscribers: list[str]
     brave_search_api_key: str
     gemini_api_key: str
@@ -138,7 +141,7 @@ def _run_inner(
         try:
             results = deps.search_fn(
                 keyword,
-                params.source_domains,
+                params.source_entries,
                 api_key=params.brave_search_api_key,
                 num=params.num_results_per_keyword,
                 freshness=params.freshness,

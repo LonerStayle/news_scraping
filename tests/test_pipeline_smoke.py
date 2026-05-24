@@ -131,7 +131,7 @@ class FakeSmtp:
 def _adapt_search(http: FakeHttp):
     def adapted(
         keyword: str,
-        source_domains: list[str],
+        source_entries: list[Any],
         *,
         api_key: str,
         num: int = 10,
@@ -139,7 +139,7 @@ def _adapt_search(http: FakeHttp):
     ):
         return real_search(
             keyword,
-            source_domains,
+            source_entries,
             api_key=api_key,
             num=num,
             freshness=freshness,
@@ -223,7 +223,7 @@ def test_smoke_end_to_end_through_real_modules() -> None:
 
     params = PipelineParams(
         keywords=["artificial intelligence"],
-        source_domains=["a.com", "b.com"],
+        source_entries=["a.com", "b.com"],
         subscribers=["alice@x.com", "bob@x.com"],
         brave_search_api_key="BSK",
         gemini_api_key="G",
@@ -298,7 +298,7 @@ def test_smoke_dry_run_skips_mail_but_runs_everything_else() -> None:
 
     params = PipelineParams(
         keywords=["AI"],
-        source_domains=["a.com"],
+        source_entries=["a.com"],
         subscribers=["x@x.com"],
         brave_search_api_key="BSK",
         gemini_api_key="G",
@@ -420,7 +420,8 @@ def test_smoke_db_config_drives_pipeline_via_cli_run_command() -> None:
     p = captured["params"]
     # 키워드/매체 모두 DB 에서 옴 (yaml fallback 무시)
     assert p.keywords == ["artificial intelligence", "LLM"]
-    assert p.source_domains == ["techcrunch.com", "theverge.com"]
+    assert [e.host for e in p.source_entries] == ["techcrunch.com", "theverge.com"]
+    assert [e.path_prefix for e in p.source_entries] == ["", ""]
     assert p.source_name_map == {
         "techcrunch.com": "TechCrunch",
         "theverge.com": "The Verge",
@@ -489,5 +490,5 @@ def test_smoke_db_empty_falls_back_to_yaml_via_cli_run_command() -> None:
 
     p = captured["params"]
     assert p.keywords == ["yaml-kw1", "yaml-kw2"]
-    assert p.source_domains == ["yaml-a.com", "yaml-b.com"]
+    assert [e.host for e in p.source_entries] == ["yaml-a.com", "yaml-b.com"]
     assert p.source_name_map == {"yaml-a.com": "YAML A", "yaml-b.com": "YAML B"}
