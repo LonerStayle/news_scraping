@@ -158,6 +158,12 @@ def search(
         h = e.host.lower().removeprefix("www.")
         host_to_entries.setdefault(h, []).append(e)
 
+    # 디버그 카운터 — 어느 단계에서 결과가 잘리는지 가시화 (대표님 운영 진단용).
+    raw_host_dist: dict[str, int] = {}
+    rejected_unknown_host: dict[str, int] = {}
+    rejected_non_article: dict[str, int] = {}
+    rejected_path_mismatch: dict[str, list[str]] = {}
+
     results: list[SearchResult] = []
     for item in items:
         link: str = item.get("url", "")
@@ -166,11 +172,15 @@ def search(
         hostname = str(
             (item.get("meta_url") or {}).get("hostname") or _domain_of(link)
         ).lower().removeprefix("www.")
+        raw_host_dist[hostname] = raw_host_dist.get(hostname, 0) + 1
+
         host_entries = host_to_entries.get(hostname)
         if not host_entries:
+            rejected_unknown_host[hostname] = rejected_unknown_host.get(hostname, 0) + 1
             continue
         if not _looks_like_article_url(link):
-            continue  # 카테고리/홈페이지/인덱스 페이지 차단
+            rejected_non_article[hostname] = rejected_non_article.get(hostname, 0) + 1
+            continue
 
         # path-prefix 매칭 — host-only row (path_prefix == "") 우선 (D5).
         url_path = urlparse(link).path
@@ -180,6 +190,10 @@ def search(
             None,
         )
         if matched is None:
+            # path 필터에서 잘린 URL — 진단 정보로 첫 3개 URL 저장.
+            samples = rejected_path_mismatch.setdefault(hostname, [])
+            if len(samples) < 3:
+                samples.append(url_path)
             continue
 
         results.append(
@@ -191,6 +205,22 @@ def search(
                 keyword=keyword,
             )
         )
+
+    # 디버그 로그 — Brave 응답 분포 + 단계별 reject 카운트.
+    if items:
+        import logging as _log
+        _logger = _log.getLogger(__name__)
+        raw_pairs = sorted(raw_host_dist.items(), key=lambda x: -x[1])
+        raw_str = ", ".join(f"{h}={n}" for h, n in raw_pairs)
+        _logger.info("Brave RAW [%s] %d items | %s", keyword, len(items), raw_str)
+        if rejected_unknown_host:
+            _logger.info("  └ unknown_host: %s", dict(rejected_unknown_host))
+        if rejected_non_article:
+            _logger.info("  └ non_article (휴리스틱 차단): %s", dict(rejected_non_article))
+        if rejected_path_mismatch:
+            for host, samples in rejected_path_mismatch.items():
+                _logger.info("  └ path_mismatch %s (%d): 예시 paths=%s",
+                             host, len(samples), samples)
     return results
 
 
