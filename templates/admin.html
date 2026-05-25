@@ -474,7 +474,11 @@
     </form>
     <div class="discover-controls" style="display:flex; gap:0.5rem; align-items:center; margin: 0.5rem 0 0 0; flex-wrap: wrap;">
       <input type="text" id="discover-keyword" placeholder="검출 키워드 (선택, 빈 칸이면 active 첫 번째 또는 'AI')" style="flex:1; min-width: 240px;">
-      <button type="button" id="discover-btn" title="도메인의 실제 글 path 패턴 자동 검출 (Brave 1회 호출)">🔍 자동 path 검출</button>
+      <label style="display:flex; align-items:center; gap:0.3rem; font-size: 0.85rem; color: var(--muted); white-space: nowrap;">
+        <input type="checkbox" id="discover-all-keywords" title="active 키워드 전체로 Brave N회 호출 + 합산 (정확도 우선, latency N배)">
+        🌐 모든 active 키워드
+      </label>
+      <button type="button" id="discover-btn" title="도메인의 실제 글 path 패턴 자동 검출 (단일 키워드 = Brave 1회 / 전체 키워드 체크 = N회 호출 합산)">🔍 자동 path 검출</button>
     </div>
     <div id="discover-result" class="card" style="display:none; margin: 0.75rem 0 1rem 0; border-color: rgba(124, 92, 255, 0.35);"></div>
     {% if sources %}
@@ -883,6 +887,7 @@
   const discoverResult = document.getElementById('discover-result');
   const domainInput = document.getElementById('source-domain-input');
   const discoverKeywordInput = document.getElementById('discover-keyword');
+  const discoverAllKeywordsInput = document.getElementById('discover-all-keywords');
 
   function escapeHtml(s) {
     return String(s).replace(/[&<>"']/g, c => ({
@@ -901,12 +906,20 @@
     if (triggerBtn) triggerBtn.disabled = true;
     discoverResult.style.display = 'block';
     discoverResult.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    discoverResult.innerHTML = '<p style="margin:0; color: var(--muted);">검색 중… (Brave API 1회 호출)</p>';
+    const useAll = discoverAllKeywordsInput && discoverAllKeywordsInput.checked;
+    const loadingMsg = useAll
+      ? '검색 중… (Brave API 전체 active 키워드 합산 호출 — N초 소요)'
+      : '검색 중… (Brave API 1회 호출)';
+    discoverResult.innerHTML = `<p style="margin:0; color: var(--muted);">${loadingMsg}</p>`;
     try {
       const fd = new FormData();
       fd.append('domain', host);
-      const kw = discoverKeywordInput ? discoverKeywordInput.value.trim() : '';
-      if (kw) fd.append('keyword', kw);
+      if (useAll) {
+        fd.append('all_keywords', 'true');
+      } else {
+        const kw = discoverKeywordInput ? discoverKeywordInput.value.trim() : '';
+        if (kw) fd.append('keyword', kw);
+      }
       const resp = await fetch('/admin/sources/discover-paths', { method: 'POST', body: fd });
       const data = await resp.json();
       if (!resp.ok) {

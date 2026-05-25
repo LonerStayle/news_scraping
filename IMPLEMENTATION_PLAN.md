@@ -82,6 +82,7 @@
 - [x] (H3) `templates/admin.html` Sources 추가 폼 옆 "🔍 자동 path 검출" 버튼 + 결과 카드 (각 추천 prefix 의 count/percent + 다중 선택 체크박스 + "전체 등록" 버튼). 사용자가 선택 → 일괄 POST `/sources` 호출 (기존 라우트 재활용). 실제 구현은 단순 single-pick (선택 → domain input 자동 채움 → 기존 추가 폼 그대로 사용) — 다중 등록은 반복 클릭으로 처리하는게 admin 기존 UX 와 일관.
 - [x] (H4) HANDOFF.md §3 매체 편향 사고 → "옵션 A 완료" 표기 + §12-C 본 섹션을 §12-D (이력 보존용) 로 옮기고 신규 §12-C 자리에 "옵션 A 완료 요약" 작성 + IMPLEMENTATION_PLAN.md DONE 로그.
 - [x] (H5) 자동 검출 UX 강화 — (a) Sources 폼 옆 검출 키워드 선택 input 추가 (빈 칸이면 기존 default), (b) 이미 등록된 source row 마다 🔍 path 검출 버튼 추가 (호스트 자동 추출 + 기존 결과 카드 재사용), (c) 결과 0 메시지에 현재 키워드 + 호스트 기반 fallback 키워드 제안 노출.
+- [x] (H6) 전체 active 키워드 합산 검출 옵션 — search.discover_paths 의 집계 로직 helper 로 분리 + `discover_paths_multi(host, keywords)` 추가. admin 라우트 `all_keywords=true` Form 받음 → multi 호출. admin.html "🌐 모든 active 키워드" 체크박스 + JS 분기. Brave 호출 N배 부담 명시 (UI hint + loading msg).
 
 ---
 

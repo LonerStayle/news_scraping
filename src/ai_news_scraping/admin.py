@@ -29,6 +29,7 @@ from .run_store import RunStore
 from .scrape_state_store import ScrapeStateStore
 from .search import PathSuggestion
 from .search import discover_paths as _default_discover_paths
+from .search import discover_paths_multi as _default_discover_paths_multi
 from .search_config_store import KeywordStore, SettingsStore, SourceStore
 from .subscriber_store import SubscriberStore
 
@@ -117,6 +118,7 @@ def create_app(
     # Phase H — 자동 path 추천 의존성. brave_search_api_key 가 있어야 라우트 활성.
     brave_search_api_key: str | None = None,
     discover_paths_fn: Callable[..., list[PathSuggestion]] | None = None,
+    discover_paths_multi_fn: Callable[..., list[PathSuggestion]] | None = None,
 ) -> FastAPI:
     app = FastAPI(title="ai_news_scraping admin")
     templates = Jinja2Templates(directory=str(templates_dir or DEFAULT_TEMPLATES_DIR))
@@ -331,12 +333,15 @@ def create_app(
     #
     # 사용자가 도메인만 입력해도 admin 이 Brave 1회 호출 → 실제 글 path
     # 패턴 추천. JS fetch 로 호출 → JSON 응답.
+    # all_keywords=True 면 active 키워드 전체로 N회 호출 + 합산 (H6).
     _discover_fn = discover_paths_fn or _default_discover_paths
+    _discover_multi_fn = discover_paths_multi_fn or _default_discover_paths_multi
 
     @app.post("/admin/sources/discover-paths", dependencies=auth_dep)
     def discover_paths_endpoint(
         domain: Annotated[str, Form()],
         keyword: Annotated[str, Form()] = "",
+        all_keywords: Annotated[bool, Form()] = False,
     ) -> dict[str, Any]:
         if brave_search_api_key is None:
             raise HTTPException(
@@ -345,7 +350,46 @@ def create_app(
         d = domain.strip().lower().removeprefix("www.")
         if not d:
             raise HTTPException(status_code=400, detail="domain is required")
-        # keyword 빈 처리: active 키워드 첫 번째 → 없으면 "AI" default.
+
+        # all_keywords=True: active 키워드 전체로 합산 (H6).
+        if all_keywords:
+            if keyword_store is None:
+                raise HTTPException(
+                    status_code=503, detail="keyword store not configured"
+                )
+            active_kws = keyword_store.list_active()
+            if not active_kws:
+                raise HTTPException(
+                    status_code=400,
+                    detail="active 키워드가 없습니다. Keywords 탭에서 먼저 추가하세요.",
+                )
+            try:
+                suggestions = _discover_multi_fn(
+                    d, active_kws, api_key=brave_search_api_key
+                )
+            except ValueError as e:
+                raise HTTPException(status_code=400, detail=str(e)) from e
+            except Exception as e:
+                raise HTTPException(
+                    status_code=503, detail=f"discover_paths_multi failed: {e}"
+                ) from e
+            return {
+                "domain": d,
+                "keyword": f"{len(active_kws)}개 키워드 합산",
+                "keywords_used": active_kws,
+                "all_keywords": True,
+                "suggestions": [
+                    {
+                        "prefix": s.prefix,
+                        "count": s.count,
+                        "percentage": s.percentage,
+                        "sample_url": s.sample_url,
+                    }
+                    for s in suggestions
+                ],
+            }
+
+        # 단일 키워드 모드 (기존 동작).
         kw = keyword.strip()
         if not kw and keyword_store is not None:
             active_kws = keyword_store.list_active()
@@ -366,6 +410,7 @@ def create_app(
         return {
             "domain": d,
             "keyword": kw,
+            "all_keywords": False,
             "suggestions": [
                 {
                     "prefix": s.prefix,

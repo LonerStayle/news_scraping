@@ -514,3 +514,112 @@ def test_discover_paths_stable_sort_on_tie() -> None:
     # tie → 등장 순서 (/alpha 먼저)
     assert suggestions[0].prefix == "/alpha"
     assert suggestions[1].prefix == "/beta"
+
+
+# ─────────── discover_paths_multi (Phase H6 — 전체 키워드 합산) ───────────
+
+
+class FakeMultiKeywordSession:
+    """키워드별로 다른 payload 반환 — multi 합산 검증용."""
+
+    def __init__(self, payloads_by_keyword: dict[str, dict[str, Any]]) -> None:
+        self._payloads = payloads_by_keyword
+        self.calls: list[dict[str, Any]] = []
+
+    def get(
+        self,
+        url: str,
+        *,
+        params: dict[str, Any],
+        headers: dict[str, str],
+        timeout: float,
+    ) -> Any:
+        self.calls.append({"params": params, "headers": headers})
+        q = params["q"]
+        for kw, payload in self._payloads.items():
+            if f'"{kw}"' in q:
+                return FakeResponse(payload)
+        return FakeResponse({"web": {"results": []}})
+
+
+def test_discover_paths_multi_combines_keywords_into_single_aggregate() -> None:
+    """두 키워드 결과를 하나의 풀로 합쳐 frequency 산출."""
+    from ai_news_scraping.search import discover_paths_multi
+
+    payloads = {
+        "AI": _payload_with_urls(
+            "openai.com",
+            ["/index/ai-article-one/", "/index/ai-article-two/", "/research/paper-x/"],
+        ),
+        "security": _payload_with_urls(
+            "openai.com",
+            ["/index/security-update/", "/research/security-paper/", "/research/another/"],
+        ),
+    }
+    session = FakeMultiKeywordSession(payloads)
+    suggestions = discover_paths_multi(
+        "openai.com", ["AI", "security"], api_key="K", session=session
+    )
+
+    # 두 키워드 합쳐 총 6건: /index 3건 (AI 2 + security 1) / /research 3건 (AI 1 + security 2).
+    # tie → 등장 순서 (AI 호출 먼저 → /index 가 먼저 등장).
+    assert len(suggestions) == 2
+    assert suggestions[0].prefix == "/index"
+    assert suggestions[0].count == 3
+    assert suggestions[0].percentage == pytest.approx(50.0, abs=0.1)
+    assert suggestions[1].prefix == "/research"
+    assert suggestions[1].count == 3
+    # 호출 횟수 = 키워드 수
+    assert len(session.calls) == 2
+
+
+def test_discover_paths_multi_calls_brave_per_keyword() -> None:
+    from ai_news_scraping.search import discover_paths_multi
+
+    session = FakeMultiKeywordSession({})
+    discover_paths_multi(
+        "a.com", ["k1", "k2", "k3"], api_key="K", session=session
+    )
+    assert len(session.calls) == 3
+
+
+def test_discover_paths_multi_skips_blank_keywords() -> None:
+    """공백 키워드는 건너뛰지만 비-공백이 하나라도 있으면 진행."""
+    from ai_news_scraping.search import discover_paths_multi
+
+    session = FakeMultiKeywordSession({
+        "AI": _payload_with_urls("a.com", ["/index/x/"]),
+    })
+    suggestions = discover_paths_multi(
+        "a.com", ["AI", "   ", ""], api_key="K", session=session
+    )
+    # 공백 2개는 skip, AI 1번만 호출
+    assert len(session.calls) == 1
+    assert len(suggestions) == 1
+
+
+def test_discover_paths_multi_rejects_empty_list() -> None:
+    from ai_news_scraping.search import discover_paths_multi
+
+    with pytest.raises(ValueError, match="keywords"):
+        discover_paths_multi(
+            "a.com", [], api_key="K", session=FakeSession({})
+        )
+
+
+def test_discover_paths_multi_rejects_all_blank_keywords() -> None:
+    from ai_news_scraping.search import discover_paths_multi
+
+    with pytest.raises(ValueError, match="keywords"):
+        discover_paths_multi(
+            "a.com", ["   ", ""], api_key="K", session=FakeSession({})
+        )
+
+
+def test_discover_paths_multi_rejects_empty_host() -> None:
+    from ai_news_scraping.search import discover_paths_multi
+
+    with pytest.raises(ValueError, match="host"):
+        discover_paths_multi(
+            "", ["AI"], api_key="K", session=FakeSession({})
+        )

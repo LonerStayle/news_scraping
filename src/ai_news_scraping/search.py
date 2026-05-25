@@ -278,56 +278,20 @@ def _first_segment(url: str) -> str | None:
     return "/" + path.split("/")[0].lower()
 
 
-def discover_paths(
-    host: str,
-    keyword: str,
-    *,
-    api_key: str,
-    num: int = 20,
-    freshness: str = "pm",
-    top_n: int = 5,
-    session: HttpSession | None = None,
+def _aggregate_first_segments(
+    items: list[dict[str, Any]],
+    normalized_host: str,
+    top_n: int,
 ) -> list[PathSuggestion]:
-    """Brave 1회 호출로 host 매체의 실제 글 path 패턴 발견.
+    """Brave 응답 items → 첫 segment frequency 집계 + top_n PathSuggestion 반환.
 
-    옵션 A (HANDOFF.md §12-C) — 사용자가 도메인만 입력해도 admin 이 자동으로
-    실제 글이 색인된 path prefix 추천. 운영 사고 (2026-05-25, 14 매체 active
-    인데 한 매체로 92% 쏠림) 의 근본 해결.
+    discover_paths (단일 키워드) 와 discover_paths_multi (전체 키워드 합산)
+    가 공유하는 내부 helper. items 가 여러 호출의 결과를 합친 거여도 same code path.
 
-    - Brave 응답 URL 들의 **첫 path segment** frequency 집계
     - 같은 host 의 row 만 집계 (Brave 가 다른 매체 결과 섞을 수 있음)
     - 도메인 루트 (`/`) 는 글이 아니라 홈 페이지로 간주 — 집계 무시
-    - sort: count DESC, 등장 순서 (Python dict 보존 + sorted stable)
+    - sort: count DESC, tie 시 등장 순서 (Python dict 보존 + sorted stable)
     """
-    if not host.strip():
-        raise ValueError("host must be non-empty")
-    if not keyword.strip():
-        raise ValueError("keyword must be non-empty")
-
-    sess: HttpSession = (
-        session if session is not None else cast(HttpSession, requests.Session())
-    )
-    normalized_host = host.lower().removeprefix("www.")
-    params: dict[str, Any] = {
-        "q": build_query(keyword, [normalized_host]),
-        "count": _clamp(num, 1, BRAVE_MAX_COUNT),
-        "freshness": freshness,
-    }
-    headers: dict[str, str] = {
-        "X-Subscription-Token": api_key,
-        "Accept": "application/json",
-    }
-    resp = sess.get(
-        BRAVE_SEARCH_ENDPOINT,
-        params=params,
-        headers=headers,
-        timeout=DEFAULT_TIMEOUT_SECONDS,
-    )
-    resp.raise_for_status()
-    payload: dict[str, Any] = resp.json()
-    items: list[dict[str, Any]] = (payload.get("web") or {}).get("results") or []
-
-    # 첫 segment → (count, first_sample_url) — Python dict 가 등장 순서 보존
     seg_counts: dict[str, list[Any]] = {}
     total_host_rows = 0
     for item in items:
@@ -350,19 +314,131 @@ def discover_paths(
     if total_host_rows == 0:
         return []
 
-    # count DESC, tie 시 등장 순서 (Python sorted 는 stable).
     sorted_entries = sorted(
         seg_counts.items(),
         key=lambda kv: -kv[1][0],
     )
-    suggestions: list[PathSuggestion] = []
-    for prefix, (count, sample) in sorted_entries[:top_n]:
-        suggestions.append(
-            PathSuggestion(
-                prefix=prefix,
-                count=count,
-                percentage=round(count / total_host_rows * 100, 1),
-                sample_url=str(sample),
-            )
+    return [
+        PathSuggestion(
+            prefix=prefix,
+            count=count,
+            percentage=round(count / total_host_rows * 100, 1),
+            sample_url=str(sample),
         )
-    return suggestions
+        for prefix, (count, sample) in sorted_entries[:top_n]
+    ]
+
+
+def _brave_search_items(
+    keyword: str,
+    normalized_host: str,
+    *,
+    api_key: str,
+    num: int,
+    freshness: str,
+    session: HttpSession,
+) -> list[dict[str, Any]]:
+    """Brave 1회 호출 → web.results 추출. discover_paths* 가 공유."""
+    params: dict[str, Any] = {
+        "q": build_query(keyword, [normalized_host]),
+        "count": _clamp(num, 1, BRAVE_MAX_COUNT),
+        "freshness": freshness,
+    }
+    headers: dict[str, str] = {
+        "X-Subscription-Token": api_key,
+        "Accept": "application/json",
+    }
+    resp = session.get(
+        BRAVE_SEARCH_ENDPOINT,
+        params=params,
+        headers=headers,
+        timeout=DEFAULT_TIMEOUT_SECONDS,
+    )
+    resp.raise_for_status()
+    payload: dict[str, Any] = resp.json()
+    items: list[dict[str, Any]] = (payload.get("web") or {}).get("results") or []
+    return items
+
+
+def discover_paths(
+    host: str,
+    keyword: str,
+    *,
+    api_key: str,
+    num: int = 20,
+    freshness: str = "pm",
+    top_n: int = 5,
+    session: HttpSession | None = None,
+) -> list[PathSuggestion]:
+    """Brave 1회 호출로 host 매체의 실제 글 path 패턴 발견.
+
+    옵션 A (HANDOFF.md §12-C) — 사용자가 도메인만 입력해도 admin 이 자동으로
+    실제 글이 색인된 path prefix 추천. 운영 사고 (2026-05-25, 14 매체 active
+    인데 한 매체로 92% 쏠림) 의 근본 해결.
+
+    여러 키워드로 합산하려면 ``discover_paths_multi()`` 사용.
+    """
+    if not host.strip():
+        raise ValueError("host must be non-empty")
+    if not keyword.strip():
+        raise ValueError("keyword must be non-empty")
+
+    sess: HttpSession = (
+        session if session is not None else cast(HttpSession, requests.Session())
+    )
+    normalized_host = host.lower().removeprefix("www.")
+    items = _brave_search_items(
+        keyword,
+        normalized_host,
+        api_key=api_key,
+        num=num,
+        freshness=freshness,
+        session=sess,
+    )
+    return _aggregate_first_segments(items, normalized_host, top_n)
+
+
+def discover_paths_multi(
+    host: str,
+    keywords: list[str],
+    *,
+    api_key: str,
+    num: int = 20,
+    freshness: str = "pm",
+    top_n: int = 5,
+    session: HttpSession | None = None,
+) -> list[PathSuggestion]:
+    """여러 키워드 Brave 호출 결과를 모아 path 패턴 합산.
+
+    옵션 A 정확도 우선 모드 (H6) — 키워드마다 매체별 색인 path 가 다를 수 있어
+    (예: ``"AI"`` → ``/index``, ``"security"`` → ``/research``), 모든 active
+    키워드 결과를 같은 풀에 합쳐 frequency 집계. UI latency 키워드 수 배.
+
+    비용: Brave 호출 ``len(keywords)`` 회. 매체 등록 시점만 호출하므로 운영
+    cap (월 2000) 대비 작지만 (예: 14 keywords × 14 매체 = 196 호출/월),
+    UI 응답 N초 대기 발생. 사용자 명시 opt-in 권장.
+    """
+    if not host.strip():
+        raise ValueError("host must be non-empty")
+    if not keywords:
+        raise ValueError("keywords must be non-empty")
+    filtered = [k.strip() for k in keywords if k.strip()]
+    if not filtered:
+        raise ValueError("keywords must be non-empty")
+
+    sess: HttpSession = (
+        session if session is not None else cast(HttpSession, requests.Session())
+    )
+    normalized_host = host.lower().removeprefix("www.")
+    all_items: list[dict[str, Any]] = []
+    for kw in filtered:
+        items = _brave_search_items(
+            kw,
+            normalized_host,
+            api_key=api_key,
+            num=num,
+            freshness=freshness,
+            session=sess,
+        )
+        all_items.extend(items)
+    return _aggregate_first_segments(all_items, normalized_host, top_n)

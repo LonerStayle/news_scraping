@@ -807,6 +807,7 @@ def _make_app_with_discover(
     *,
     api_key: str | None = "fake-brave-key",
     discover_fn: Any = None,
+    discover_multi_fn: Any = None,
     keyword_store: InMemoryKeywordStore | None = None,
 ) -> TestClient:
     return TestClient(create_app(
@@ -817,6 +818,7 @@ def _make_app_with_discover(
         source_store=InMemorySourceStore(),
         brave_search_api_key=api_key,
         discover_paths_fn=discover_fn,
+        discover_paths_multi_fn=discover_multi_fn,
     ))
 
 
@@ -984,3 +986,81 @@ def test_index_renders_per_row_discover_button(ctx: AdminCtx) -> None:
     assert 'class="row-discover-btn"' in resp.text
     assert 'data-domain="openai.com"' in resp.text
     assert 'data-domain="anthropic.com"' in resp.text
+
+
+def test_index_renders_all_keywords_checkbox(ctx: AdminCtx) -> None:
+    """🌐 모든 active 키워드로 검출 체크박스가 렌더링됨 (H6)."""
+    resp = ctx.client.get("/", auth=AUTH)
+    assert resp.status_code == 200
+    assert 'id="discover-all-keywords"' in resp.text
+    assert "모든 active 키워드" in resp.text
+
+
+def test_discover_paths_endpoint_all_keywords_calls_multi() -> None:
+    """all_keywords=True → admin 이 keyword_store.list_active() 를 multi 함수에 전달."""
+    captured: dict[str, Any] = {}
+
+    def fake_multi(host: str, kws: list[str], *, api_key: str) -> list[PathSuggestion]:
+        captured["host"] = host
+        captured["kws"] = kws
+        captured["api_key"] = api_key
+        return [
+            PathSuggestion("/index", 10, 50.0, "https://openai.com/index/a/"),
+            PathSuggestion("/research", 10, 50.0, "https://openai.com/research/b/"),
+        ]
+
+    kw_store = InMemoryKeywordStore()
+    kw_store.add("AI")
+    kw_store.add("security")
+    kw_store.add("Claude")
+    client = _make_app_with_discover(
+        discover_multi_fn=fake_multi, keyword_store=kw_store
+    )
+    resp = client.post(
+        "/admin/sources/discover-paths", auth=AUTH,
+        data={"domain": "openai.com", "all_keywords": "true"},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["all_keywords"] is True
+    assert body["keywords_used"] == ["AI", "security", "Claude"]
+    assert "3개 키워드 합산" in body["keyword"]
+    assert len(body["suggestions"]) == 2
+    # multi 함수가 active 키워드 전체 받음
+    assert captured["host"] == "openai.com"
+    assert captured["kws"] == ["AI", "security", "Claude"]
+
+
+def test_discover_paths_endpoint_all_keywords_400_when_no_active() -> None:
+    """active 키워드 0 시 all_keywords=True 는 400."""
+    kw_store = InMemoryKeywordStore()  # empty
+    client = _make_app_with_discover(keyword_store=kw_store)
+    resp = client.post(
+        "/admin/sources/discover-paths", auth=AUTH,
+        data={"domain": "openai.com", "all_keywords": "true"},
+    )
+    assert resp.status_code == 400
+    assert "active 키워드" in resp.text
+
+
+def test_discover_paths_endpoint_single_mode_unchanged_when_all_keywords_false() -> None:
+    """all_keywords=false (또는 누락) 시 단일 모드 기존 동작 유지."""
+    captured: dict[str, Any] = {}
+
+    def fake_single(host: str, keyword: str, *, api_key: str) -> list[PathSuggestion]:
+        captured["keyword"] = keyword
+        return []
+
+    def fake_multi(*args: Any, **kwargs: Any) -> list[PathSuggestion]:
+        captured["multi_called"] = True
+        return []
+
+    client = _make_app_with_discover(
+        discover_fn=fake_single, discover_multi_fn=fake_multi
+    )
+    client.post(
+        "/admin/sources/discover-paths", auth=AUTH,
+        data={"domain": "openai.com", "keyword": "AI"},
+    )
+    assert captured["keyword"] == "AI"
+    assert "multi_called" not in captured  # single 만 호출됨
