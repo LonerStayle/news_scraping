@@ -958,3 +958,15 @@ def test_discover_paths_endpoint_requires_auth() -> None:
         data={"domain": "openai.com"},
     )
     assert resp.status_code == 401
+
+
+def test_index_renders_discover_button_in_sources_panel(ctx: AdminCtx) -> None:
+    """admin index 의 Sources 패널에 자동 path 검출 UI 가 렌더링됨."""
+    resp = ctx.client.get("/", auth=AUTH)
+    assert resp.status_code == 200
+    # 자동 검출 버튼 + 결과 컨테이너 둘 다 존재
+    assert 'id="discover-btn"' in resp.text
+    assert 'id="discover-result"' in resp.text
+    assert "자동 path 검출" in resp.text
+    # JS 가 호출하는 endpoint URL 명시
+    assert "/admin/sources/discover-paths" in resp.text
