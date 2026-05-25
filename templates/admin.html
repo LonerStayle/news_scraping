@@ -471,8 +471,11 @@
       <input type="text" name="name" required placeholder="이름 (예: TechCrunch)">
       <input type="text" name="description" placeholder="설명 (선택)">
       <button type="submit" class="primary">추가</button>
-      <button type="button" id="discover-btn" title="도메인의 실제 글 path 패턴 자동 검출 (Brave 1회 호출)">🔍 자동 path 검출</button>
     </form>
+    <div class="discover-controls" style="display:flex; gap:0.5rem; align-items:center; margin: 0.5rem 0 0 0; flex-wrap: wrap;">
+      <input type="text" id="discover-keyword" placeholder="검출 키워드 (선택, 빈 칸이면 active 첫 번째 또는 'AI')" style="flex:1; min-width: 240px;">
+      <button type="button" id="discover-btn" title="도메인의 실제 글 path 패턴 자동 검출 (Brave 1회 호출)">🔍 자동 path 검출</button>
+    </div>
     <div id="discover-result" class="card" style="display:none; margin: 0.75rem 0 1rem 0; border-color: rgba(124, 92, 255, 0.35);"></div>
     {% if sources %}
       <div class="table-wrap">
@@ -489,6 +492,7 @@
               <td class="actions-cell">
                 <span class="view-actions">
                   <button class="edit-btn" data-id="{{ s.id }}">수정</button>
+                  <button class="row-discover-btn" data-id="{{ s.id }}" data-domain="{{ s.domain }}" title="이 매체의 path 패턴 자동 검출 (위 추가 폼에 추천 결과 표시)">🔍 path 검출</button>
                   <form class="inline" method="post" action="/sources/{{ s.id }}/toggle"><button>토글</button></form>
                   <form class="inline" method="post" action="/sources/{{ s.id }}/delete"><button class="danger">삭제</button></form>
                 </span>
@@ -878,6 +882,7 @@
   const discoverBtn = document.getElementById('discover-btn');
   const discoverResult = document.getElementById('discover-result');
   const domainInput = document.getElementById('source-domain-input');
+  const discoverKeywordInput = document.getElementById('discover-keyword');
 
   function escapeHtml(s) {
     return String(s).replace(/[&<>"']/g, c => ({
@@ -885,64 +890,79 @@
     }[c]));
   }
 
-  if (discoverBtn) {
-    discoverBtn.addEventListener('click', async () => {
-      const raw = domainInput.value.trim();
-      if (!raw) {
-        showToast('❌ 도메인 먼저 입력하세요');
-        domainInput.focus();
+  async function runDiscoverPaths(rawDomain, triggerBtn) {
+    if (!rawDomain || !rawDomain.trim()) {
+      showToast('❌ 도메인 먼저 입력하세요');
+      if (domainInput) domainInput.focus();
+      return;
+    }
+    // path 포함 입력이면 host 만 추출. 스킴/www 자동 정리.
+    const host = rawDomain.trim().replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0];
+    if (triggerBtn) triggerBtn.disabled = true;
+    discoverResult.style.display = 'block';
+    discoverResult.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    discoverResult.innerHTML = '<p style="margin:0; color: var(--muted);">검색 중… (Brave API 1회 호출)</p>';
+    try {
+      const fd = new FormData();
+      fd.append('domain', host);
+      const kw = discoverKeywordInput ? discoverKeywordInput.value.trim() : '';
+      if (kw) fd.append('keyword', kw);
+      const resp = await fetch('/admin/sources/discover-paths', { method: 'POST', body: fd });
+      const data = await resp.json();
+      if (!resp.ok) {
+        const detail = (data && data.detail) || resp.statusText;
+        discoverResult.innerHTML = `<p style="color: #ff7676; margin:0;">❌ 검출 실패: ${escapeHtml(detail)}</p>`;
         return;
       }
-      // path 포함 입력이면 host 만 추출. 스킴/www 자동 정리.
-      const host = raw.replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0];
-      discoverBtn.disabled = true;
-      discoverResult.style.display = 'block';
-      discoverResult.innerHTML = '<p style="margin:0; color: var(--muted);">검색 중… (Brave API 1회 호출)</p>';
-      try {
-        const fd = new FormData();
-        fd.append('domain', host);
-        const resp = await fetch('/admin/sources/discover-paths', { method: 'POST', body: fd });
-        const data = await resp.json();
-        if (!resp.ok) {
-          const detail = (data && data.detail) || resp.statusText;
-          discoverResult.innerHTML = `<p style="color: #ff7676; margin:0;">❌ 검출 실패: ${escapeHtml(detail)}</p>`;
-          return;
-        }
-        if (!data.suggestions || data.suggestions.length === 0) {
-          discoverResult.innerHTML = `<p style="margin:0;">⚠ <code>${escapeHtml(host)}</code> 에서 path 패턴을 찾지 못했습니다. 호스트 전체로 등록하거나 다른 키워드로 재시도.</p>`;
-          return;
-        }
-        const rows = data.suggestions.map(s => {
-          const fullDomain = data.domain + s.prefix;
-          return `
-            <tr>
-              <td><code>${escapeHtml(fullDomain)}</code></td>
-              <td style="text-align:right;">${s.count}건 (${s.percentage}%)</td>
-              <td><a href="${escapeHtml(s.sample_url)}" target="_blank" rel="noopener" style="color: var(--accent); font-size: 0.85rem;">예시 ↗</a></td>
-              <td><button type="button" class="primary discover-pick" data-domain="${escapeHtml(fullDomain)}">선택</button></td>
-            </tr>
-          `;
-        }).join('');
+      if (!data.suggestions || data.suggestions.length === 0) {
         discoverResult.innerHTML = `
-          <h3 style="margin:0 0 0.5rem 0;">🔍 ${escapeHtml(host)} 의 실제 글 path 패턴</h3>
-          <p class="hint" style="margin:0 0 0.75rem 0; color: var(--muted); font-size: 0.85rem;">키워드 <code>${escapeHtml(data.keyword)}</code> 로 Brave 검색한 결과. 원하는 항목을 선택하면 위 폼의 도메인 칸에 자동 입력됩니다.</p>
-          <table style="width:100%;"><tbody>${rows}</tbody></table>
+          <p style="margin:0 0 0.5rem 0;">⚠ <code>${escapeHtml(host)}</code> 에서 path 패턴을 찾지 못했습니다.</p>
+          <p style="margin:0; color: var(--muted); font-size: 0.85rem;">현재 사용 키워드: <code>${escapeHtml(data.keyword)}</code>. 위 검출 키워드 칸에 다른 키워드 (예: <code>${escapeHtml(host.split('.')[0])}</code>) 를 넣고 재시도하거나, 호스트 전체로 등록하세요.</p>
         `;
-        discoverResult.querySelectorAll('.discover-pick').forEach(btn => {
-          btn.addEventListener('click', () => {
-            domainInput.value = btn.dataset.domain;
-            discoverResult.style.display = 'none';
-            domainInput.focus();
-            showToast('✓ ' + btn.dataset.domain + ' 선택됨 — 이름 입력 후 추가');
-          });
-        });
-      } catch (err) {
-        discoverResult.innerHTML = `<p style="color: #ff7676; margin:0;">❌ 네트워크 오류: ${escapeHtml(err.message)}</p>`;
-      } finally {
-        discoverBtn.disabled = false;
+        return;
       }
-    });
+      const rows = data.suggestions.map(s => {
+        const fullDomain = data.domain + s.prefix;
+        return `
+          <tr>
+            <td><code>${escapeHtml(fullDomain)}</code></td>
+            <td style="text-align:right;">${s.count}건 (${s.percentage}%)</td>
+            <td><a href="${escapeHtml(s.sample_url)}" target="_blank" rel="noopener" style="color: var(--accent); font-size: 0.85rem;">예시 ↗</a></td>
+            <td><button type="button" class="primary discover-pick" data-domain="${escapeHtml(fullDomain)}">선택</button></td>
+          </tr>
+        `;
+      }).join('');
+      discoverResult.innerHTML = `
+        <h3 style="margin:0 0 0.5rem 0;">🔍 ${escapeHtml(host)} 의 실제 글 path 패턴</h3>
+        <p class="hint" style="margin:0 0 0.75rem 0; color: var(--muted); font-size: 0.85rem;">키워드 <code>${escapeHtml(data.keyword)}</code> 로 Brave 검색한 결과. 원하는 항목을 선택하면 위 폼의 도메인 칸에 자동 입력됩니다.</p>
+        <table style="width:100%;"><tbody>${rows}</tbody></table>
+      `;
+      discoverResult.querySelectorAll('.discover-pick').forEach(btn => {
+        btn.addEventListener('click', () => {
+          if (domainInput) {
+            domainInput.value = btn.dataset.domain;
+            domainInput.focus();
+            domainInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }
+          discoverResult.style.display = 'none';
+          showToast('✓ ' + btn.dataset.domain + ' 선택됨 — 이름 입력 후 추가');
+        });
+      });
+    } catch (err) {
+      discoverResult.innerHTML = `<p style="color: #ff7676; margin:0;">❌ 네트워크 오류: ${escapeHtml(err.message)}</p>`;
+    } finally {
+      if (triggerBtn) triggerBtn.disabled = false;
+    }
   }
+
+  if (discoverBtn) {
+    discoverBtn.addEventListener('click', () => runDiscoverPaths(domainInput.value, discoverBtn));
+  }
+
+  // ─── 이미 등록된 source row 에서도 자동 path 검출 ───
+  document.querySelectorAll('.row-discover-btn').forEach(btn => {
+    btn.addEventListener('click', () => runDiscoverPaths(btn.dataset.domain, btn));
+  });
 </script>
 </body>
 </html>

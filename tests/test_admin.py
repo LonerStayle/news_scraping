@@ -968,5 +968,19 @@ def test_index_renders_discover_button_in_sources_panel(ctx: AdminCtx) -> None:
     assert 'id="discover-btn"' in resp.text
     assert 'id="discover-result"' in resp.text
     assert "자동 path 검출" in resp.text
+    # keyword 선택 input (H5)
+    assert 'id="discover-keyword"' in resp.text
     # JS 가 호출하는 endpoint URL 명시
     assert "/admin/sources/discover-paths" in resp.text
+
+
+def test_index_renders_per_row_discover_button(ctx: AdminCtx) -> None:
+    """이미 등록된 source row 마다 🔍 path 검출 버튼이 렌더링됨 (H5)."""
+    ctx.source_store.add("openai.com", "OpenAI")
+    ctx.source_store.add("anthropic.com", "Anthropic")
+    resp = ctx.client.get("/", auth=AUTH)
+    assert resp.status_code == 200
+    # 각 row 의 data-domain 속성에 호스트가 들어가야 JS 가 그 host 로 호출 가능
+    assert 'class="row-discover-btn"' in resp.text
+    assert 'data-domain="openai.com"' in resp.text
+    assert 'data-domain="anthropic.com"' in resp.text
