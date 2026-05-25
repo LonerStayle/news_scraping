@@ -558,7 +558,8 @@ def test_discover_paths_multi_combines_keywords_into_single_aggregate() -> None:
     }
     session = FakeMultiKeywordSession(payloads)
     suggestions = discover_paths_multi(
-        "openai.com", ["AI", "security"], api_key="K", session=session
+        "openai.com", ["AI", "security"], api_key="K", session=session,
+        delay_seconds=0,
     )
 
     # 두 키워드 합쳐 총 6건: /index 3건 (AI 2 + security 1) / /research 3건 (AI 1 + security 2).
@@ -578,7 +579,8 @@ def test_discover_paths_multi_calls_brave_per_keyword() -> None:
 
     session = FakeMultiKeywordSession({})
     discover_paths_multi(
-        "a.com", ["k1", "k2", "k3"], api_key="K", session=session
+        "a.com", ["k1", "k2", "k3"], api_key="K", session=session,
+        delay_seconds=0,
     )
     assert len(session.calls) == 3
 
@@ -591,11 +593,48 @@ def test_discover_paths_multi_skips_blank_keywords() -> None:
         "AI": _payload_with_urls("a.com", ["/index/x/"]),
     })
     suggestions = discover_paths_multi(
-        "a.com", ["AI", "   ", ""], api_key="K", session=session
+        "a.com", ["AI", "   ", ""], api_key="K", session=session,
+        delay_seconds=0,
     )
     # 공백 2개는 skip, AI 1번만 호출
     assert len(session.calls) == 1
     assert len(suggestions) == 1
+
+
+def test_discover_paths_multi_sleeps_between_keywords_to_avoid_429(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Brave Free 의 1 query/sec rate limit 우회 — 키워드 사이 sleep 호출."""
+    from ai_news_scraping import search as search_mod
+
+    sleeps: list[float] = []
+
+    def fake_sleep(s: float) -> None:
+        sleeps.append(s)
+
+    monkeypatch.setattr(search_mod.time, "sleep", fake_sleep)
+    session = FakeMultiKeywordSession({})
+    search_mod.discover_paths_multi(
+        "a.com", ["k1", "k2", "k3"], api_key="K", session=session,
+        delay_seconds=1.2,
+    )
+    # 키워드 3개면 그 사이에 sleep 2번 (첫 호출 전 X, 1↔2, 2↔3)
+    assert sleeps == [1.2, 1.2]
+
+
+def test_discover_paths_multi_delay_zero_skips_sleep(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """delay_seconds=0 면 sleep 호출 X (테스트 편의)."""
+    from ai_news_scraping import search as search_mod
+
+    sleeps: list[float] = []
+    monkeypatch.setattr(search_mod.time, "sleep", lambda s: sleeps.append(s))
+    search_mod.discover_paths_multi(
+        "a.com", ["k1", "k2"], api_key="K", session=FakeMultiKeywordSession({}),
+        delay_seconds=0,
+    )
+    assert sleeps == []
 
 
 def test_discover_paths_multi_rejects_empty_list() -> None:

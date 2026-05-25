@@ -10,6 +10,7 @@ quota (월 2,000) 안에서 운영한다 (CLAUDE.md §6). 일 5 호출 × 30일 
 
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass
 from typing import Any, Protocol, cast
 from urllib.parse import urlparse
@@ -406,6 +407,7 @@ def discover_paths_multi(
     num: int = 20,
     freshness: str = "pm",
     top_n: int = 5,
+    delay_seconds: float = 1.2,
     session: HttpSession | None = None,
 ) -> list[PathSuggestion]:
     """여러 키워드 Brave 호출 결과를 모아 path 패턴 합산.
@@ -417,6 +419,10 @@ def discover_paths_multi(
     비용: Brave 호출 ``len(keywords)`` 회. 매체 등록 시점만 호출하므로 운영
     cap (월 2000) 대비 작지만 (예: 14 keywords × 14 매체 = 196 호출/월),
     UI 응답 N초 대기 발생. 사용자 명시 opt-in 권장.
+
+    ⚠️ **Brave Free tier rate limit**: 1 query/sec. 키워드 사이 ``delay_seconds``
+    (기본 1.2초) sleep 으로 429 방어. ``pipeline.py`` 와 동일 패턴. 테스트는
+    ``delay_seconds=0`` 명시.
     """
     if not host.strip():
         raise ValueError("host must be non-empty")
@@ -431,7 +437,10 @@ def discover_paths_multi(
     )
     normalized_host = host.lower().removeprefix("www.")
     all_items: list[dict[str, Any]] = []
-    for kw in filtered:
+    for i, kw in enumerate(filtered):
+        if i > 0 and delay_seconds > 0:
+            # Brave Free: 1 query/sec rate limit. 키워드 사이 sleep 으로 429 방어.
+            time.sleep(delay_seconds)
         items = _brave_search_items(
             kw,
             normalized_host,
