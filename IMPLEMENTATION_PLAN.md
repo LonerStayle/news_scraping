@@ -78,7 +78,7 @@
 > 해결: admin 이 도메인만으로 Brave 호출 → 실제 글 path frequency 분석 → 사용자에게 추천.
 
 - [x] (H1) `search.discover_paths(host, keyword, api_key, num=20)` helper — Brave 1회 호출 + 응답 URL path frequency 집계 + top N prefix `PathSuggestion(prefix, count, percentage, sample_url)` 반환. 테스트: FakeBraveSession 으로 단위 (집계 / sort / empty / 매체 외 url 무시).
-- [ ] (H2) `admin.py` POST `/admin/sources/discover-paths` 라우트 — JSON body (domain 필수 + keyword 선택, 없으면 active 키워드 첫 번째 또는 "AI"). discover_paths 호출 결과 JSON 반환. 테스트: 정상 + 잘못된 domain reject + Brave 실패 시 503.
+- [x] (H2) `admin.py` POST `/admin/sources/discover-paths` 라우트 — JSON body (domain 필수 + keyword 선택, 없으면 active 키워드 첫 번째 또는 "AI"). discover_paths 호출 결과 JSON 반환. 테스트: 정상 + 잘못된 domain reject + Brave 실패 시 503.
 - [ ] (H3) `templates/admin.html` Sources 추가 폼 옆 "🔍 자동 path 검출" 버튼 + 결과 카드 (각 추천 prefix 의 count/percent + 다중 선택 체크박스 + "전체 등록" 버튼). 사용자가 선택 → 일괄 POST `/sources` 호출 (기존 라우트 재활용).
 - [ ] (H4) HANDOFF.md §3 매체 편향 사고 → "옵션 A 완료" 표기 + §12-C 본 섹션을 §12-D (이력 보존용) 로 옮기고 신규 §12-C 자리에 "옵션 A 완료 요약" 작성 + IMPLEMENTATION_PLAN.md DONE 로그.
 

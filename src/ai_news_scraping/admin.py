@@ -27,6 +27,8 @@ from fastapi.templating import Jinja2Templates
 
 from .run_store import RunStore
 from .scrape_state_store import ScrapeStateStore
+from .search import PathSuggestion
+from .search import discover_paths as _default_discover_paths
 from .search_config_store import KeywordStore, SettingsStore, SourceStore
 from .subscriber_store import SubscriberStore
 
@@ -112,6 +114,9 @@ def create_app(
     run_pipeline: Callable[[bool, bool], Any] | None = None,
     auth_enabled: bool = True,
     templates_dir: Path | None = None,
+    # Phase H — 자동 path 추천 의존성. brave_search_api_key 가 있어야 라우트 활성.
+    brave_search_api_key: str | None = None,
+    discover_paths_fn: Callable[..., list[PathSuggestion]] | None = None,
 ) -> FastAPI:
     app = FastAPI(title="ai_news_scraping admin")
     templates = Jinja2Templates(directory=str(templates_dir or DEFAULT_TEMPLATES_DIR))
@@ -321,5 +326,55 @@ def create_app(
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e)) from e
         return RedirectResponse(url="/", status_code=status.HTTP_303_SEE_OTHER)
+
+    # ────────── 자동 path 추천 (Phase H — 옵션 A) ──────────
+    #
+    # 사용자가 도메인만 입력해도 admin 이 Brave 1회 호출 → 실제 글 path
+    # 패턴 추천. JS fetch 로 호출 → JSON 응답.
+    _discover_fn = discover_paths_fn or _default_discover_paths
+
+    @app.post("/admin/sources/discover-paths", dependencies=auth_dep)
+    def discover_paths_endpoint(
+        domain: Annotated[str, Form()],
+        keyword: Annotated[str, Form()] = "",
+    ) -> dict[str, Any]:
+        if brave_search_api_key is None:
+            raise HTTPException(
+                status_code=503, detail="brave_search_api_key not configured"
+            )
+        d = domain.strip().lower().removeprefix("www.")
+        if not d:
+            raise HTTPException(status_code=400, detail="domain is required")
+        # keyword 빈 처리: active 키워드 첫 번째 → 없으면 "AI" default.
+        kw = keyword.strip()
+        if not kw and keyword_store is not None:
+            active_kws = keyword_store.list_active()
+            if active_kws:
+                kw = active_kws[0]
+        if not kw:
+            kw = "AI"
+        try:
+            suggestions = _discover_fn(
+                d, kw, api_key=brave_search_api_key
+            )
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
+        except Exception as e:
+            raise HTTPException(
+                status_code=503, detail=f"discover_paths failed: {e}"
+            ) from e
+        return {
+            "domain": d,
+            "keyword": kw,
+            "suggestions": [
+                {
+                    "prefix": s.prefix,
+                    "count": s.count,
+                    "percentage": s.percentage,
+                    "sample_url": s.sample_url,
+                }
+                for s in suggestions
+            ],
+        }
 
     return app

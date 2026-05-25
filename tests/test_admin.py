@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
@@ -794,3 +795,166 @@ def test_api_runs_latest_returns_null_run_when_empty_store() -> None:
     client = TestClient(app)
     resp = client.get("/api/runs/latest", auth=AUTH)
     assert resp.json() == {"available": True, "run": None}
+
+
+# ────────── 자동 path 추천 (Phase H — 옵션 A) ──────────
+
+
+from ai_news_scraping.search import PathSuggestion  # noqa: E402
+
+
+def _make_app_with_discover(
+    *,
+    api_key: str | None = "fake-brave-key",
+    discover_fn: Any = None,
+    keyword_store: InMemoryKeywordStore | None = None,
+) -> TestClient:
+    return TestClient(create_app(
+        admin_token=ADMIN_TOKEN,
+        subscriber_store=InMemorySubscriberStore(),
+        scrape_state_store=InMemoryScrapeStateStore(),
+        keyword_store=keyword_store or InMemoryKeywordStore(),
+        source_store=InMemorySourceStore(),
+        brave_search_api_key=api_key,
+        discover_paths_fn=discover_fn,
+    ))
+
+
+def test_discover_paths_endpoint_returns_json_suggestions() -> None:
+    captured: dict[str, Any] = {}
+
+    def fake_discover(host: str, keyword: str, *, api_key: str) -> list[PathSuggestion]:
+        captured["host"] = host
+        captured["keyword"] = keyword
+        captured["api_key"] = api_key
+        return [
+            PathSuggestion("/index", 13, 65.0, "https://openai.com/index/a/"),
+            PathSuggestion("/research", 3, 15.0, "https://openai.com/research/b/"),
+        ]
+
+    client = _make_app_with_discover(discover_fn=fake_discover)
+    resp = client.post(
+        "/admin/sources/discover-paths", auth=AUTH,
+        data={"domain": "openai.com", "keyword": "OpenAI"},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["domain"] == "openai.com"
+    assert body["keyword"] == "OpenAI"
+    assert len(body["suggestions"]) == 2
+    assert body["suggestions"][0] == {
+        "prefix": "/index",
+        "count": 13,
+        "percentage": 65.0,
+        "sample_url": "https://openai.com/index/a/",
+    }
+    assert captured == {
+        "host": "openai.com",
+        "keyword": "OpenAI",
+        "api_key": "fake-brave-key",
+    }
+
+
+def test_discover_paths_endpoint_strips_www_and_lowercases_domain() -> None:
+    captured: dict[str, Any] = {}
+
+    def fake_discover(host: str, keyword: str, *, api_key: str) -> list[PathSuggestion]:
+        captured["host"] = host
+        return []
+
+    client = _make_app_with_discover(discover_fn=fake_discover)
+    client.post(
+        "/admin/sources/discover-paths", auth=AUTH,
+        data={"domain": "WWW.OpenAI.COM", "keyword": "AI"},
+    )
+    assert captured["host"] == "openai.com"
+
+
+def test_discover_paths_endpoint_uses_active_keyword_default() -> None:
+    """keyword 빈 → keyword_store 의 첫 번째 active 키워드 자동 사용."""
+    captured: dict[str, Any] = {}
+
+    def fake_discover(host: str, keyword: str, *, api_key: str) -> list[PathSuggestion]:
+        captured["keyword"] = keyword
+        return []
+
+    kw_store = InMemoryKeywordStore()
+    kw_store.add("LLM")
+    kw_store.add("AI agents")
+    client = _make_app_with_discover(
+        discover_fn=fake_discover, keyword_store=kw_store
+    )
+    client.post(
+        "/admin/sources/discover-paths", auth=AUTH,
+        data={"domain": "openai.com"},
+    )
+    assert captured["keyword"] == "LLM"
+
+
+def test_discover_paths_endpoint_falls_back_to_ai_when_no_keyword() -> None:
+    """keyword_store 비었거나 active 없으면 'AI' default."""
+    captured: dict[str, Any] = {}
+
+    def fake_discover(host: str, keyword: str, *, api_key: str) -> list[PathSuggestion]:
+        captured["keyword"] = keyword
+        return []
+
+    client = _make_app_with_discover(discover_fn=fake_discover)
+    client.post(
+        "/admin/sources/discover-paths", auth=AUTH,
+        data={"domain": "openai.com"},
+    )
+    assert captured["keyword"] == "AI"
+
+
+def test_discover_paths_endpoint_503_when_api_key_missing() -> None:
+    client = _make_app_with_discover(api_key=None)
+    resp = client.post(
+        "/admin/sources/discover-paths", auth=AUTH,
+        data={"domain": "openai.com"},
+    )
+    assert resp.status_code == 503
+    assert "brave_search_api_key" in resp.text
+
+
+def test_discover_paths_endpoint_400_when_domain_blank() -> None:
+    client = _make_app_with_discover()
+    resp = client.post(
+        "/admin/sources/discover-paths", auth=AUTH,
+        data={"domain": "  ", "keyword": "AI"},
+    )
+    assert resp.status_code == 400
+
+
+def test_discover_paths_endpoint_400_on_value_error() -> None:
+    def fake_discover(host: str, keyword: str, *, api_key: str) -> list[PathSuggestion]:
+        raise ValueError("host must be non-empty")
+
+    client = _make_app_with_discover(discover_fn=fake_discover)
+    resp = client.post(
+        "/admin/sources/discover-paths", auth=AUTH,
+        data={"domain": "openai.com", "keyword": "AI"},
+    )
+    assert resp.status_code == 400
+
+
+def test_discover_paths_endpoint_503_on_external_error() -> None:
+    def fake_discover(host: str, keyword: str, *, api_key: str) -> list[PathSuggestion]:
+        raise RuntimeError("Brave 429 rate limit")
+
+    client = _make_app_with_discover(discover_fn=fake_discover)
+    resp = client.post(
+        "/admin/sources/discover-paths", auth=AUTH,
+        data={"domain": "openai.com", "keyword": "AI"},
+    )
+    assert resp.status_code == 503
+    assert "discover_paths failed" in resp.text
+
+
+def test_discover_paths_endpoint_requires_auth() -> None:
+    client = _make_app_with_discover()
+    resp = client.post(
+        "/admin/sources/discover-paths",
+        data={"domain": "openai.com"},
+    )
+    assert resp.status_code == 401

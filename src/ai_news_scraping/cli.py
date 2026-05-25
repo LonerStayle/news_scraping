@@ -188,6 +188,8 @@ def _entry_admin(*, host: str, port: int) -> int:
         run_store=run_store,
         run_pipeline=run_pipeline_now,
         auth_enabled=settings.admin_auth_enabled,
+        # Phase H — 자동 path 추천. 같은 Brave key 재활용.
+        brave_search_api_key=settings.brave_search_api_key,
     )
     logger.info("admin server starting at http://%s:%d", host, port)
     uvicorn.run(app, host=host, port=port)
