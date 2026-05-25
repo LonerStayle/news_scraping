@@ -67,11 +67,13 @@ def _compute_recommended(keywords: list[Any], sources: list[Any]) -> dict[str, A
         freshness = "pm"
         freshness_label = "past month (1개월)"
     max_articles = max(20, active_keywords * 5 + 10)
-    # 매체당 cap — 한 매체 편향 방지. 권장: max_articles / active_sources × 1.5 마진,
-    # 최소 2 / 최대 10. active_sources 0 인 corner case 는 default 3.
+    # 매체당 cap — 한 매체 편향 방지. 권장: max_articles / active_sources / 2
+    # (분산 강제). 최소 2 / 최대 5. active_sources 0 corner case 는 default 3.
+    # 이전 공식 (× 1.5) 은 너무 후해 cap 거의 무력 (예: 14 매체 → cap 9 → 한
+    # 매체 8건 다 통과). 새 공식: 14 매체 → cap 3, 5 매체 → cap 3-4.
     if active_sources > 0:
-        ideal = max_articles / active_sources * 1.5
-        max_per_source = max(2, min(10, round(ideal)))
+        ideal = max_articles / active_sources / 2
+        max_per_source = max(2, min(5, round(ideal)))
     else:
         max_per_source = 3
     brave_calls_month = active_keywords * 30

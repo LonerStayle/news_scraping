@@ -504,6 +504,27 @@ def test_compute_recommended_user_scenario_14x14() -> None:
     assert rec["max_articles_for_summary"] == 80  # 14*5+10
     assert rec["freshness"] == "pw"  # 196 < 200
     assert rec["brave_calls_per_month"] == 420
+    # cap 분산 강제: 80 / 14 / 2 = 2.86 → round 3
+    # (이전 공식 ×1.5 는 9 라 cap 무력 — 한 매체 우위 사고 재발)
+    assert rec["max_per_source"] == 3
+
+
+def test_compute_recommended_max_per_source_bounded() -> None:
+    """max_per_source 권장값은 2~5 범위로 clamp."""
+    from dataclasses import dataclass
+
+    from ai_news_scraping.admin import _compute_recommended
+
+    @dataclass
+    class _R:
+        active: bool = True
+
+    # 매체 1개만 active 면 max_articles / 1 / 2 = 큰 값 → 5 로 clamp
+    rec_few = _compute_recommended([_R() for _ in range(5)], [_R()])
+    assert rec_few["max_per_source"] == 5
+    # 매체 30개 active 면 max_articles / 30 / 2 ≈ 1.33 → 1.0 round = 1 → max(2,1) = 2
+    rec_many = _compute_recommended([_R() for _ in range(5)], [_R() for _ in range(30)])
+    assert rec_many["max_per_source"] == 2
 
 
 def test_compute_recommended_large_15x15_returns_pd() -> None:
