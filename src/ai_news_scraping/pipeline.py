@@ -52,6 +52,9 @@ class PipelineParams:
     dry_run: bool = False
     num_results_per_keyword: int = 20  # Brave max — 더 많은 후보 확보
     max_articles_for_summary: int = 20
+    # 한 매체 SEO 편향 방지 — 본문 추출 후 매체별 최대 N 건만 통과.
+    # 0 이면 cap 비활성 (운영 기본은 3).
+    max_per_source: int = 3
     freshness: str = "pw"  # Brave Search: past week — pd 보다 풍부
     search_delay_seconds: float = 1.2  # Brave Free: 1 query/sec rate limit
     subject_template: str = "오늘의 AI 트렌드 ({date})"
@@ -188,7 +191,19 @@ def _run_inner(
             skipped_reason="no_articles_extracted",
         )
 
-    capped = extracted[: params.max_articles_for_summary]
+    # 매체별 cap — 한 매체 SEO 편향 방지. 추출 순서 유지하면서 매체별 카운트.
+    # extracted_count 는 본문 추출 단계 통과 수 (cap 전) 유지 — 운영 통계의 의미 보존.
+    if params.max_per_source > 0:
+        per_source_counts: dict[str, int] = {}
+        balanced: list[tuple[SearchResult, ExtractedArticle]] = []
+        for r, a in extracted:
+            cnt = per_source_counts.get(a.source_domain, 0)
+            if cnt < params.max_per_source:
+                per_source_counts[a.source_domain] = cnt + 1
+                balanced.append((r, a))
+        capped = balanced[: params.max_articles_for_summary]
+    else:
+        capped = extracted[: params.max_articles_for_summary]
     summary_inputs = [
         SummaryInput(
             title=a.title,

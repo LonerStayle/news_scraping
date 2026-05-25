@@ -418,6 +418,7 @@
         <tr><td>freshness</td><td><code>{{ settings.freshness }}</code></td></tr>
         <tr><td>키워드당 결과 수</td><td>{{ settings.num_results_per_keyword }}</td></tr>
         <tr><td>AI 분석 기사 개수</td><td>{{ settings.max_articles_for_summary }}건</td></tr>
+        <tr><td>매체당 최대</td><td>{{ settings.max_per_source }}건 (편향 방지 cap)</td></tr>
         <tr><td>최소 본문 길이</td><td>{{ settings.min_body_len }}자</td></tr>
         {% endif %}
       </table>
@@ -542,6 +543,14 @@
               </td>
             </tr>
             <tr>
+              <td>매체당 최대 (편향 방지)</td>
+              <td><strong>{{ recommended.max_per_source }}</strong> <small style="color: var(--muted);">(AI cap / active 소스 × 1.5)</small></td>
+              <td>
+                {{ settings.max_per_source }}
+                {% if settings.max_per_source > recommended.max_per_source %}<span style="color: #ffb547;" title="권장값보다 커서 한 매체에 쏠릴 가능성">⚠</span>{% elif settings.max_per_source < recommended.max_per_source %}<span style="color: var(--muted);" title="더 엄격하게 분산">·</span>{% else %}<span style="color: #4ade80;">✓</span>{% endif %}
+              </td>
+            </tr>
+            <tr>
               <td>최소 본문 길이</td>
               <td>{{ recommended.min_body_len }} (paywall 방어)</td>
               <td>
@@ -584,6 +593,11 @@
           <label for="min_body_len">최소 본문 길이 (50-5000자)</label>
           <input type="number" name="min_body_len" id="min_body_len" min="50" max="5000" value="{{ settings.min_body_len }}">
           <div class="hint">짧은 본문 skip (paywall 방어).</div>
+        </div>
+        <div class="field">
+          <label for="max_per_source">매체당 최대 결과 수 (1-20)</label>
+          <input type="number" name="max_per_source" id="max_per_source" min="1" max="20" value="{{ settings.max_per_source }}">
+          <div class="hint">한 매체 SEO 편향 방지. 본문 추출 후 매체별 N건 초과는 drop. 14 매체 active 면 3~5 권장 (TechCrunch 같은 강한 매체가 결과 다 차지하는 것 차단).</div>
         </div>
         <div class="field">
           <label>발송 시각 (KST)</label>

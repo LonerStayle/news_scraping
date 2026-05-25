@@ -36,6 +36,7 @@ class SearchSettings:
     min_body_len: int = 300
     send_hour: int = 8
     send_minute: int = 40
+    max_per_source: int = 3
 
 
 def _normalize_domain(raw: str) -> str:
@@ -449,6 +450,7 @@ def _validate_settings_update(
     min_body_len: int | None,
     send_hour: int | None = None,
     send_minute: int | None = None,
+    max_per_source: int | None = None,
 ) -> dict[str, Any]:
     payload: dict[str, Any] = {}
     if freshness is not None:
@@ -477,6 +479,10 @@ def _validate_settings_update(
         if not 0 <= send_minute <= 59:
             raise ValueError(f"send_minute must be 0..59: {send_minute}")
         payload["send_minute"] = send_minute
+    if max_per_source is not None:
+        if not 1 <= max_per_source <= 20:
+            raise ValueError(f"max_per_source must be 1..20: {max_per_source}")
+        payload["max_per_source"] = max_per_source
     return payload
 
 
@@ -491,6 +497,7 @@ class SettingsStore(Protocol):
         min_body_len: int | None = None,
         send_hour: int | None = None,
         send_minute: int | None = None,
+        max_per_source: int | None = None,
     ) -> SearchSettings: ...
 
 
@@ -510,10 +517,11 @@ class InMemorySettingsStore:
         min_body_len: int | None = None,
         send_hour: int | None = None,
         send_minute: int | None = None,
+        max_per_source: int | None = None,
     ) -> SearchSettings:
         payload = _validate_settings_update(
             freshness, num_results_per_keyword, max_articles_for_summary, min_body_len,
-            send_hour, send_minute,
+            send_hour, send_minute, max_per_source,
         )
         self._current = replace(self._current, **payload)
         return self._current
@@ -535,7 +543,7 @@ class SupabaseSettingsStore:
             .select(
                 "freshness, num_results_per_keyword, "
                 "max_articles_for_summary, min_body_len, "
-                "send_hour, send_minute"
+                "send_hour, send_minute, max_per_source"
             )
             .eq("id", self.SINGLETON_ID)
             .single()
@@ -549,6 +557,7 @@ class SupabaseSettingsStore:
             min_body_len=int(row.get("min_body_len", 300)),
             send_hour=int(row.get("send_hour", 8)),
             send_minute=int(row.get("send_minute", 40)),
+            max_per_source=int(row.get("max_per_source", 3)),
         )
 
     def update(
@@ -560,10 +569,11 @@ class SupabaseSettingsStore:
         min_body_len: int | None = None,
         send_hour: int | None = None,
         send_minute: int | None = None,
+        max_per_source: int | None = None,
     ) -> SearchSettings:
         payload = _validate_settings_update(
             freshness, num_results_per_keyword, max_articles_for_summary, min_body_len,
-            send_hour, send_minute,
+            send_hour, send_minute, max_per_source,
         )
         if not payload:
             return self.get()

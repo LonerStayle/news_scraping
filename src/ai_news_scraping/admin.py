@@ -67,6 +67,13 @@ def _compute_recommended(keywords: list[Any], sources: list[Any]) -> dict[str, A
         freshness = "pm"
         freshness_label = "past month (1개월)"
     max_articles = max(20, active_keywords * 5 + 10)
+    # 매체당 cap — 한 매체 편향 방지. 권장: max_articles / active_sources × 1.5 마진,
+    # 최소 2 / 최대 10. active_sources 0 인 corner case 는 default 3.
+    if active_sources > 0:
+        ideal = max_articles / active_sources * 1.5
+        max_per_source = max(2, min(10, round(ideal)))
+    else:
+        max_per_source = 3
     brave_calls_month = active_keywords * 30
     brave_cap_pct = round(brave_calls_month / 2000 * 100, 1)
     return {
@@ -74,6 +81,7 @@ def _compute_recommended(keywords: list[Any], sources: list[Any]) -> dict[str, A
         "active_sources": active_sources,
         "num_results_per_keyword": 20,
         "max_articles_for_summary": max_articles,
+        "max_per_source": max_per_source,
         "freshness": freshness,
         "freshness_label": freshness_label,
         "min_body_len": 300,
@@ -294,6 +302,7 @@ def create_app(
         min_body_len: Annotated[int | None, Form()] = None,
         send_hour: Annotated[int | None, Form()] = None,
         send_minute: Annotated[int | None, Form()] = None,
+        max_per_source: Annotated[int | None, Form()] = None,
     ) -> RedirectResponse:
         if settings_store is None:
             raise HTTPException(status_code=503, detail="settings store not configured")
@@ -305,6 +314,7 @@ def create_app(
                 min_body_len=min_body_len,
                 send_hour=send_hour,
                 send_minute=send_minute,
+                max_per_source=max_per_source,
             )
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e)) from e

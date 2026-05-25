@@ -34,6 +34,9 @@ def _params(**overrides: Any) -> PipelineParams:
         "gmail_user": "me@gmail.com",
         "gmail_password": "P",
         "dry_run": False,
+        # 테스트 기본은 매체별 cap 비활성 — 단일 매체 결과 다수가 통과해야 하는 기존
+        # 시나리오 보존. per-source cap 자체 동작은 별도 테스트에서 검증.
+        "max_per_source": 0,
     }
     defaults.update(overrides)
     return PipelineParams(**defaults)
@@ -318,6 +321,39 @@ def test_run_caps_summary_input_at_max_articles() -> None:
     assert result.extracted_count == 25
     assert result.article_count == 20  # capped
     assert fakes["summarize_fn"].calls[0]["n"] == 20
+
+
+def test_run_caps_per_source_when_one_domain_dominates() -> None:
+    """매체 편향 사고 재현 + 해결 검증 — a.com 25개, b.com 25개 결과 시
+    max_per_source=3 가 각 매체 3건씩만 통과 (합 6).
+    """
+    urls_a = [_result_factory(f"https://a.com/{i}", "kw1", domain="a.com") for i in range(25)]
+    urls_b = [_result_factory(f"https://b.com/{i}", "kw1", domain="b.com") for i in range(25)]
+    search_fn = FakeSearchFn(by_keyword={"kw1": urls_a + urls_b})
+    # 본문 추출 결과의 source_domain 까지 매체별로 명시해야 매체 cap 검증 의미 있음.
+    by_url = {
+        f"https://a.com/{i}": _extracted_for(f"https://a.com/{i}", domain="a.com")
+        for i in range(25)
+    }
+    by_url.update({
+        f"https://b.com/{i}": _extracted_for(f"https://b.com/{i}", domain="b.com")
+        for i in range(25)
+    })
+    extract_fn = FakeExtractFn(by_url=by_url)
+    deps, fakes = _make_deps(search_fn=search_fn, extract_fn=extract_fn)
+    result = run(_params(max_articles_for_summary=20, max_per_source=3), deps)
+    assert result.extracted_count == 50  # 모두 추출 단계 통과
+    assert result.article_count == 6  # 매체당 3건 × 2 매체
+    assert fakes["summarize_fn"].calls[0]["n"] == 6
+
+
+def test_run_per_source_cap_zero_disables() -> None:
+    """max_per_source=0 면 cap 비활성 (단일 매체 결과 모두 통과)."""
+    urls = [f"https://a.com/{i}" for i in range(10)]
+    search_fn = FakeSearchFn(by_keyword={"kw1": [_result_factory(u, "kw1") for u in urls]})
+    deps, fakes = _make_deps(search_fn=search_fn)
+    result = run(_params(max_articles_for_summary=20, max_per_source=0), deps)
+    assert result.article_count == 10  # cap 없이 다 통과
 
 
 # ────────── mail refused ──────────

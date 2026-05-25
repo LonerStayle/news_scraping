@@ -317,6 +317,7 @@ def build_params(
         dry_run=dry_run,
         num_results_per_keyword=s.num_results_per_keyword,
         max_articles_for_summary=s.max_articles_for_summary,
+        max_per_source=s.max_per_source,
         freshness=s.freshness,
     )
 
