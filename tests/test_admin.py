@@ -989,11 +989,22 @@ def test_index_renders_per_row_discover_button(ctx: AdminCtx) -> None:
 
 
 def test_index_renders_all_keywords_checkbox(ctx: AdminCtx) -> None:
-    """🌐 모든 active 키워드로 검출 체크박스가 렌더링됨 (H6)."""
+    """🌐 모든 active 키워드로 검출 체크박스가 렌더링됨 (H6) + default checked (H8 T1)."""
     resp = ctx.client.get("/", auth=AUTH)
     assert resp.status_code == 200
     assert 'id="discover-all-keywords"' in resp.text
     assert "모든 active 키워드" in resp.text
+    # default checked — admin 진입 시 합산 모드가 default
+    assert 'id="discover-all-keywords" checked' in resp.text
+
+
+def test_index_renders_discover_overlay(ctx: AdminCtx) -> None:
+    """검출 중 페이지 전체 overlay element 가 렌더링됨 (H8 T2)."""
+    resp = ctx.client.get("/", auth=AUTH)
+    assert resp.status_code == 200
+    assert 'id="discover-overlay"' in resp.text
+    assert "big-spinner" in resp.text
+    assert 'id="discover-overlay-label"' in resp.text
 
 
 def test_discover_paths_endpoint_all_keywords_calls_multi() -> None:

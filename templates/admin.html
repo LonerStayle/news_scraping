@@ -348,6 +348,45 @@
     .run-status.done .status-icon { display: inline; color: var(--success); }
     .run-status.failed .status-icon { display: inline; color: var(--danger); }
     .run-status .elapsed { color: var(--dim); margin-left: auto; font-variant-numeric: tabular-nums; }
+
+    /* 자동 path 검출 중 페이지 전체 overlay (H8) */
+    .discover-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(8, 10, 18, 0.72);
+      backdrop-filter: blur(4px);
+      -webkit-backdrop-filter: blur(4px);
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 1.25rem;
+      z-index: 9999;
+      pointer-events: all;
+    }
+    .discover-overlay.show { display: flex; }
+    .discover-overlay .big-spinner {
+      width: 56px;
+      height: 56px;
+      border: 4px solid rgba(255, 255, 255, 0.15);
+      border-top-color: var(--accent);
+      border-right-color: var(--accent-2);
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+    .discover-overlay .label {
+      color: #e8ecff;
+      font-size: 1rem;
+      font-weight: 500;
+      letter-spacing: 0.02em;
+    }
+    .discover-overlay .sub-label {
+      color: rgba(232, 236, 255, 0.65);
+      font-size: 0.85rem;
+      max-width: 360px;
+      text-align: center;
+      line-height: 1.5;
+    }
   </style>
 </head>
 <body>
@@ -475,8 +514,8 @@
     <div class="discover-controls" style="display:flex; gap:0.5rem; align-items:center; margin: 0.5rem 0 0 0; flex-wrap: wrap;">
       <input type="text" id="discover-keyword" placeholder="검출 키워드 (선택, 빈 칸이면 active 첫 번째 또는 'AI')" style="flex:1; min-width: 240px;">
       <label style="display:flex; align-items:center; gap:0.3rem; font-size: 0.85rem; color: var(--muted); white-space: nowrap;">
-        <input type="checkbox" id="discover-all-keywords" title="active 키워드 전체로 Brave N회 호출 + 합산 (정확도 우선, latency N배)">
-        🌐 모든 active 키워드
+        <input type="checkbox" id="discover-all-keywords" checked title="active 키워드 전체로 Brave N회 호출 + 합산 (정확도 우선, latency N배). 해제 시 단일 키워드 모드.">
+        🌐 모든 active 키워드 (정확도 우선)
       </label>
       <button type="button" id="discover-btn" title="도메인의 실제 글 path 패턴 자동 검출 (단일 키워드 = Brave 1회 / 전체 키워드 체크 = N회 호출 합산)">🔍 자동 path 검출</button>
     </div>
@@ -911,6 +950,20 @@
       ? '검색 중… (Brave API 전체 active 키워드 합산 호출 — N초 소요)'
       : '검색 중… (Brave API 1회 호출)';
     discoverResult.innerHTML = `<p style="margin:0; color: var(--muted);">${loadingMsg}</p>`;
+
+    // 페이지 전체 overlay — 검출 끝날 때까지 다른 클릭/입력 차단.
+    const overlay = document.getElementById('discover-overlay');
+    const overlayLabel = document.getElementById('discover-overlay-label');
+    const overlaySub = document.getElementById('discover-overlay-sub');
+    if (overlay) {
+      overlayLabel.textContent = useAll
+        ? '🌐 모든 active 키워드로 검출 중…'
+        : '🔍 path 패턴 검출 중…';
+      overlaySub.textContent = useAll
+        ? '여러 키워드 합산 중 — 최대 N초 소요 (창을 닫거나 다른 작업을 하지 마십시오)'
+        : `Brave 1회 호출 중… (${escapeHtml(host)})`;
+      overlay.classList.add('show');
+    }
     try {
       const fd = new FormData();
       fd.append('domain', host);
@@ -965,6 +1018,9 @@
       discoverResult.innerHTML = `<p style="color: #ff7676; margin:0;">❌ 네트워크 오류: ${escapeHtml(err.message)}</p>`;
     } finally {
       if (triggerBtn) triggerBtn.disabled = false;
+      // overlay 항상 제거 (성공/실패 무관).
+      const overlay = document.getElementById('discover-overlay');
+      if (overlay) overlay.classList.remove('show');
     }
   }
 
@@ -977,5 +1033,12 @@
     btn.addEventListener('click', () => runDiscoverPaths(btn.dataset.domain, btn));
   });
 </script>
+
+<!-- 자동 path 검출 중 페이지 전체 overlay (H8) — 다른 클릭/입력 차단 -->
+<div id="discover-overlay" class="discover-overlay" aria-live="polite" aria-busy="true">
+  <div class="big-spinner"></div>
+  <div class="label" id="discover-overlay-label">검출 중…</div>
+  <div class="sub-label" id="discover-overlay-sub">잠시만 기다려주십시오</div>
+</div>
 </body>
 </html>
