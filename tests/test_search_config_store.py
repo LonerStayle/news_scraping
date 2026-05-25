@@ -241,7 +241,7 @@ def test_in_memory_settings_invalid_ranges() -> None:
     with pytest.raises(ValueError, match="num_results"):
         s.update(num_results_per_keyword=21)
     with pytest.raises(ValueError, match="max_articles"):
-        s.update(max_articles_for_summary=101)
+        s.update(max_articles_for_summary=1001)
     with pytest.raises(ValueError, match="min_body"):
         s.update(min_body_len=10)
 

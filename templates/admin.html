@@ -417,7 +417,7 @@
         <tr><td>발송 시각</td><td><strong>{{ "%02d"|format(settings.send_hour) }}:{{ "%02d"|format(settings.send_minute) }} KST</strong> (cron 매 5분 ±2분 윈도우)</td></tr>
         <tr><td>freshness</td><td><code>{{ settings.freshness }}</code></td></tr>
         <tr><td>키워드당 결과 수</td><td>{{ settings.num_results_per_keyword }}</td></tr>
-        <tr><td>요약 입력 max</td><td>{{ settings.max_articles_for_summary }}건</td></tr>
+        <tr><td>AI 분석 기사 개수</td><td>{{ settings.max_articles_for_summary }}건</td></tr>
         <tr><td>최소 본문 길이</td><td>{{ settings.min_body_len }}자</td></tr>
         {% endif %}
       </table>
@@ -526,9 +526,9 @@
           <div class="hint">Brave 한 호출당 결과 수.</div>
         </div>
         <div class="field">
-          <label for="max_articles_for_summary">요약 입력 최대 (1-100)</label>
-          <input type="number" name="max_articles_for_summary" id="max_articles_for_summary" min="1" max="100" value="{{ settings.max_articles_for_summary }}">
-          <div class="hint">Gemini 에 넘기는 기사 cap.</div>
+          <label for="max_articles_for_summary">AI 분석 기사 개수 (1-1000)</label>
+          <input type="number" name="max_articles_for_summary" id="max_articles_for_summary" min="1" max="1000" value="{{ settings.max_articles_for_summary }}">
+          <div class="hint">Gemini 에 넘기는 기사 cap. 키워드 N개 × 평균 통과 3~5건 이상으로 잡으면 모든 키워드 결과 흡수. 너무 크면 요약 품질 dilute 위험.</div>
         </div>
         <div class="field">
           <label for="min_body_len">최소 본문 길이 (50-5000자)</label>

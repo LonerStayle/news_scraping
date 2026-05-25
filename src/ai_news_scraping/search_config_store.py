@@ -460,8 +460,10 @@ def _validate_settings_update(
             raise ValueError(f"num_results_per_keyword must be 1..20: {num_results_per_keyword}")
         payload["num_results_per_keyword"] = num_results_per_keyword
     if max_articles_for_summary is not None:
-        if not 1 <= max_articles_for_summary <= 100:
-            raise ValueError(f"max_articles_for_summary must be 1..100: {max_articles_for_summary}")
+        if not 1 <= max_articles_for_summary <= 1000:
+            raise ValueError(
+                f"max_articles_for_summary must be 1..1000: {max_articles_for_summary}"
+            )
         payload["max_articles_for_summary"] = max_articles_for_summary
     if min_body_len is not None:
         if not 50 <= min_body_len <= 5000:
