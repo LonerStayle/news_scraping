@@ -507,6 +507,56 @@
   <!-- ───── Settings ───── -->
   <section class="panel" id="settings">
     <h2>운영 설정</h2>
+    {% if settings and recommended %}
+    <div class="card" style="margin-bottom: 1.5rem; border-color: rgba(124, 92, 255, 0.35);">
+      <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; flex-wrap: wrap;">
+        <h3 style="margin: 0;">💡 스마트 권장값</h3>
+        <span style="color: var(--muted); font-size: 0.85rem;">active 키워드 <strong>{{ recommended.active_keywords }}개</strong> · active 소스 <strong>{{ recommended.active_sources }}개</strong></span>
+      </div>
+      <div class="rec-table-wrap" style="margin-top: 1rem;">
+        <table class="rec-table">
+          <thead><tr><th>설정</th><th>권장값</th><th>현재값</th></tr></thead>
+          <tbody>
+            <tr>
+              <td>freshness</td>
+              <td><code>{{ recommended.freshness }}</code> · {{ recommended.freshness_label }}</td>
+              <td>
+                <code>{{ settings.freshness }}</code>
+                {% if settings.freshness != recommended.freshness %}<span style="color: #ffb547;" title="권장값과 다름">⚠</span>{% else %}<span style="color: #4ade80;">✓</span>{% endif %}
+              </td>
+            </tr>
+            <tr>
+              <td>키워드당 결과 수</td>
+              <td>{{ recommended.num_results_per_keyword }} (Brave max)</td>
+              <td>
+                {{ settings.num_results_per_keyword }}
+                {% if settings.num_results_per_keyword < recommended.num_results_per_keyword %}<span style="color: #ffb547;" title="권장값보다 작음">⚠</span>{% else %}<span style="color: #4ade80;">✓</span>{% endif %}
+              </td>
+            </tr>
+            <tr>
+              <td>AI 분석 기사 개수</td>
+              <td><strong>{{ recommended.max_articles_for_summary }}</strong> <small style="color: var(--muted);">(키워드 {{ recommended.active_keywords }} × 5 + 10)</small></td>
+              <td>
+                {{ settings.max_articles_for_summary }}
+                {% if settings.max_articles_for_summary < recommended.max_articles_for_summary %}<span style="color: #ffb547;" title="권장값보다 작아 키워드 뒤쪽 누락 위험">⚠</span>{% else %}<span style="color: #4ade80;">✓</span>{% endif %}
+              </td>
+            </tr>
+            <tr>
+              <td>최소 본문 길이</td>
+              <td>{{ recommended.min_body_len }} (paywall 방어)</td>
+              <td>
+                {{ settings.min_body_len }}
+                {% if settings.min_body_len != recommended.min_body_len %}<span style="color: var(--muted);" title="권장값과 다름">·</span>{% else %}<span style="color: #4ade80;">✓</span>{% endif %}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p style="color: var(--muted); margin: 0.9rem 0 0; font-size: 0.82rem;">
+        Brave 검색 호출 예상: <strong>일 {{ recommended.brave_calls_per_day }}회</strong> · 월 {{ recommended.brave_calls_per_month }}회 ({{ recommended.brave_cap_pct }}% of free cap 2,000)
+      </p>
+    </div>
+    {% endif %}
     {% if settings %}
     <form method="post" action="/settings" class="card">
       <div class="settings-form">

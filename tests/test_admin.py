@@ -458,6 +458,89 @@ def test_settings_send_time_partial_preserves_other(ctx: AdminCtx) -> None:
     assert cur.send_minute == 40  # 기본값 유지
 
 
+def test_compute_recommended_small_5x5_returns_pm() -> None:
+    from dataclasses import dataclass
+
+    from ai_news_scraping.admin import _compute_recommended
+
+    @dataclass
+    class _R:
+        active: bool = True
+
+    rec = _compute_recommended([_R() for _ in range(5)], [_R() for _ in range(5)])
+    assert rec["active_keywords"] == 5
+    assert rec["active_sources"] == 5
+    assert rec["max_articles_for_summary"] == 35  # max(20, 5*5+10)
+    assert rec["freshness"] == "pm"  # 25 < 50
+    assert rec["brave_calls_per_day"] == 5
+
+
+def test_compute_recommended_medium_10x10_returns_pw() -> None:
+    from dataclasses import dataclass
+
+    from ai_news_scraping.admin import _compute_recommended
+
+    @dataclass
+    class _R:
+        active: bool = True
+
+    rec = _compute_recommended([_R() for _ in range(10)], [_R() for _ in range(10)])
+    assert rec["max_articles_for_summary"] == 60  # 10*5+10
+    assert rec["freshness"] == "pw"  # 100 >= 50, <200
+
+
+def test_compute_recommended_user_scenario_14x14() -> None:
+    """대표님 시나리오 — 키워드 14 + 소스 14."""
+    from dataclasses import dataclass
+
+    from ai_news_scraping.admin import _compute_recommended
+
+    @dataclass
+    class _R:
+        active: bool = True
+
+    rec = _compute_recommended([_R() for _ in range(14)], [_R() for _ in range(14)])
+    assert rec["active_keywords"] == 14
+    assert rec["max_articles_for_summary"] == 80  # 14*5+10
+    assert rec["freshness"] == "pw"  # 196 < 200
+    assert rec["brave_calls_per_month"] == 420
+
+
+def test_compute_recommended_large_15x15_returns_pd() -> None:
+    from dataclasses import dataclass
+
+    from ai_news_scraping.admin import _compute_recommended
+
+    @dataclass
+    class _R:
+        active: bool = True
+
+    rec = _compute_recommended([_R() for _ in range(15)], [_R() for _ in range(15)])
+    assert rec["freshness"] == "pd"  # 225 >= 200
+
+
+def test_compute_recommended_excludes_inactive() -> None:
+    from dataclasses import dataclass
+
+    from ai_news_scraping.admin import _compute_recommended
+
+    @dataclass
+    class _R:
+        active: bool = True
+
+    kws = [_R(active=True), _R(active=False), _R(active=True)]
+    srcs = [_R(active=True)]
+    rec = _compute_recommended(kws, srcs)
+    assert rec["active_keywords"] == 2  # active 만 카운트
+    assert rec["active_sources"] == 1
+
+
+def test_index_shows_recommended_card(ctx: AdminCtx) -> None:
+    resp = ctx.client.get("/", auth=AUTH)
+    assert resp.status_code == 200
+    assert "스마트 권장값" in resp.text
+
+
 def test_overview_shows_send_time(ctx: AdminCtx) -> None:
     ctx.settings_store.update(send_hour=9, send_minute=15)
     resp = ctx.client.get("/", auth=AUTH)
