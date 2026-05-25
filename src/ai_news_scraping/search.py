@@ -29,7 +29,16 @@ _BLOCKED_FIRST_SEGMENTS = frozenset({
     "category", "categories", "tag", "tags", "topics", "topic",
     "author", "authors", "search", "page", "pages",
 })
-_MIN_LAST_SEGMENT_LEN = 10  # 개별 기사 slug 는 보통 10자 이상 (kebab-case)
+# 마지막 segment 의 최소 길이. 예전엔 10 이었지만 운영 로그에서 정상 글
+# (예: anthropic.com/news/anthropic-nec, ai.meta.com/blog/llama-x) 도 다수
+# 차단되어 5 로 완화. 너무 작으면 /models/, /api/ 같은 product 페이지 통과
+# 위험이 있어 첫 segment 가 'product'/'docs'/'api' 류면 별도 차단.
+_MIN_LAST_SEGMENT_LEN = 5
+_BLOCKED_PRODUCT_SEGMENTS = frozenset({
+    "product", "products", "docs", "doc", "api", "apis", "pricing",
+    "careers", "about", "contact", "support", "help", "legal", "privacy",
+    "terms", "events", "event",
+})
 
 
 def _looks_like_article_url(url: str) -> bool:
@@ -42,8 +51,9 @@ def _looks_like_article_url(url: str) -> bool:
         return False  # /news, /blog, /category 같은 단일 segment
     if segments[0].lower() in _BLOCKED_FIRST_SEGMENTS:
         return False  # /category/ai, /tag/ml
+    if segments[0].lower() in _BLOCKED_PRODUCT_SEGMENTS:
+        return False  # /product/claude-cowork, /events/aws-summit, /careers/...
     last = segments[-1]
-    # /models/, /models/gemini/ 같은 짧은 제품·카테고리 페이지 차단.
     return len(last) >= _MIN_LAST_SEGMENT_LEN
 
 
