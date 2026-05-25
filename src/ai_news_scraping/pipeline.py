@@ -152,7 +152,29 @@ def _run_inner(
         except Exception as e:
             logger.warning("search failed for keyword=%r: %s", keyword, e)
             continue
+        # 매체 다양성 디버깅 — 어떤 매체에서 결과 몇 건 나왔는지 즉시 가시화.
+        # 운영 중 한 매체 편향 의심 시 cron / dry-run 로그에서 분포 확인용.
+        per_host: dict[str, int] = {}
+        for r in results:
+            per_host[r.source_domain] = per_host.get(r.source_domain, 0) + 1
+        if per_host:
+            dist = ", ".join(f"{h}={n}" for h, n in sorted(per_host.items(), key=lambda x: -x[1]))
+            logger.info("search keyword=%r → %d results | %s", keyword, len(results), dist)
+        else:
+            logger.info("search keyword=%r → 0 results (Brave 응답에 결과 없음)", keyword)
         raw_results.extend(results)
+
+    # 전체 검색 끝난 후 종합 분포 — 어느 매체가 압도하는지 한눈에.
+    overall: dict[str, int] = {}
+    for r in raw_results:
+        overall[r.source_domain] = overall.get(r.source_domain, 0) + 1
+    if overall:
+        top = sorted(overall.items(), key=lambda x: -x[1])
+        logger.info(
+            "search ALL keywords combined → %d raw results | top: %s",
+            len(raw_results),
+            ", ".join(f"{h}={n}" for h, n in top[:10]),
+        )
 
     # ───── 2) dedup (in-batch + DB) ─────
     deduped = _dedup_in_batch(raw_results)
