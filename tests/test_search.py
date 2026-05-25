@@ -332,3 +332,185 @@ def test_search_custom_freshness() -> None:
     session = FakeSession({"web": {"results": []}})
     search("AI", ["a.com"], api_key="k", freshness="pw", session=session)
     assert session.calls[0]["params"]["freshness"] == "pw"
+
+
+# ─────────── discover_paths (Phase H — 자동 path 추천) ───────────
+
+
+def _payload_with_urls(host: str, paths: list[str]) -> dict[str, Any]:
+    """헬퍼: 같은 host 의 다양한 path URL 들을 Brave 응답 payload 로 변환."""
+    return {
+        "web": {
+            "results": [
+                {
+                    "title": f"T-{i}",
+                    "url": f"https://{host}{p}",
+                    "description": "snippet",
+                    "meta_url": {"hostname": host},
+                }
+                for i, p in enumerate(paths)
+            ]
+        }
+    }
+
+
+def test_discover_paths_aggregates_by_first_segment() -> None:
+    """OpenAI 실제 사고 시나리오: /index 13건 / /research 3건 / /blog 1건."""
+    from ai_news_scraping.search import PathSuggestion, discover_paths
+
+    paths = (
+        [f"/index/openai-on-aws-{i}/" for i in range(13)]
+        + [f"/research/paper-{i}/" for i in range(3)]
+        + ["/blog/spring-update/"]
+    )
+    session = FakeSession(_payload_with_urls("openai.com", paths))
+    suggestions = discover_paths(
+        "openai.com", "AI", api_key="K", session=session
+    )
+
+    # frequency 순 정렬
+    assert len(suggestions) == 3
+    assert isinstance(suggestions[0], PathSuggestion)
+    assert suggestions[0].prefix == "/index"
+    assert suggestions[0].count == 13
+    assert suggestions[0].percentage == pytest.approx(76.5, abs=0.1)
+    assert suggestions[0].sample_url == "https://openai.com/index/openai-on-aws-0/"
+    assert suggestions[1].prefix == "/research"
+    assert suggestions[1].count == 3
+    assert suggestions[2].prefix == "/blog"
+    assert suggestions[2].count == 1
+
+
+def test_discover_paths_ignores_other_hosts() -> None:
+    """Brave 가 다른 매체 결과 섞어 보내도 host 외 row 는 집계 X."""
+    from ai_news_scraping.search import discover_paths
+
+    session = FakeSession({
+        "web": {
+            "results": [
+                {"url": "https://openai.com/index/a-real-article-here/",
+                 "title": "T", "description": "s",
+                 "meta_url": {"hostname": "openai.com"}},
+                {"url": "https://techcrunch.com/2026/05/leak-article/",
+                 "title": "T", "description": "s",
+                 "meta_url": {"hostname": "techcrunch.com"}},
+                {"url": "https://wired.com/story/random/",
+                 "title": "T", "description": "s",
+                 "meta_url": {"hostname": "wired.com"}},
+            ]
+        }
+    })
+    suggestions = discover_paths(
+        "openai.com", "AI", api_key="K", session=session
+    )
+    assert len(suggestions) == 1
+    assert suggestions[0].prefix == "/index"
+    assert suggestions[0].count == 1
+    assert suggestions[0].percentage == pytest.approx(100.0, abs=0.1)
+
+
+def test_discover_paths_ignores_root_url() -> None:
+    """도메인 루트 (/ 만) 는 글이 아니라 홈 페이지 — 집계 무시."""
+    from ai_news_scraping.search import discover_paths
+
+    session = FakeSession(_payload_with_urls("a.com", [
+        "/", "", "/index/article-one/", "/index/article-two/",
+    ]))
+    suggestions = discover_paths(
+        "a.com", "AI", api_key="K", session=session
+    )
+    assert len(suggestions) == 1
+    assert suggestions[0].prefix == "/index"
+    assert suggestions[0].count == 2
+
+
+def test_discover_paths_strips_www_prefix() -> None:
+    """www.host 와 host 는 동일 매체로 묶음."""
+    from ai_news_scraping.search import discover_paths
+
+    session = FakeSession({
+        "web": {
+            "results": [
+                {"url": "https://www.theverge.com/2026/05/ai-policy-story/",
+                 "title": "T", "description": "s",
+                 "meta_url": {"hostname": "www.theverge.com"}},
+                {"url": "https://theverge.com/2026/05/another-story/",
+                 "title": "T", "description": "s",
+                 "meta_url": {"hostname": "theverge.com"}},
+            ]
+        }
+    })
+    suggestions = discover_paths(
+        "theverge.com", "AI", api_key="K", session=session
+    )
+    # /2026 prefix 1개 (둘 다 같은 첫 segment)
+    assert len(suggestions) == 1
+    assert suggestions[0].count == 2
+
+
+def test_discover_paths_empty_response() -> None:
+    from ai_news_scraping.search import discover_paths
+
+    session = FakeSession({"web": {"results": []}})
+    suggestions = discover_paths(
+        "openai.com", "AI", api_key="K", session=session
+    )
+    assert suggestions == []
+
+
+def test_discover_paths_sends_correct_brave_query() -> None:
+    from ai_news_scraping.search import discover_paths
+
+    session = FakeSession({"web": {"results": []}})
+    discover_paths("openai.com", "AI", api_key="K1", session=session)
+    call = session.calls[0]
+    assert call["url"] == BRAVE_SEARCH_ENDPOINT
+    assert call["headers"]["X-Subscription-Token"] == "K1"
+    assert "site:openai.com" in call["params"]["q"]
+    assert "AI" in call["params"]["q"]
+    # default freshness: pm (path 발견 목적이라 넓게)
+    assert call["params"]["freshness"] == "pm"
+    assert call["params"]["count"] == 20
+
+
+def test_discover_paths_rejects_empty_host() -> None:
+    from ai_news_scraping.search import discover_paths
+
+    with pytest.raises(ValueError, match="host"):
+        discover_paths("", "AI", api_key="K", session=FakeSession({}))
+
+
+def test_discover_paths_rejects_empty_keyword() -> None:
+    from ai_news_scraping.search import discover_paths
+
+    with pytest.raises(ValueError, match="keyword"):
+        discover_paths("a.com", "  ", api_key="K", session=FakeSession({}))
+
+
+def test_discover_paths_top_n_limit() -> None:
+    """top N (default 5) 만 반환 — 너무 분산된 매체 노이즈 차단."""
+    from ai_news_scraping.search import discover_paths
+
+    paths = [f"/seg{i}/article/" for i in range(10)]  # 10 unique first segments
+    session = FakeSession(_payload_with_urls("a.com", paths))
+    suggestions = discover_paths(
+        "a.com", "AI", api_key="K", session=session, top_n=5
+    )
+    assert len(suggestions) == 5
+
+
+def test_discover_paths_stable_sort_on_tie() -> None:
+    """같은 count 면 처음 발견된 prefix 우선 — 결과 결정적."""
+    from ai_news_scraping.search import discover_paths
+
+    paths = ["/alpha/a/", "/beta/b/", "/alpha/c/", "/beta/d/"]
+    session = FakeSession(_payload_with_urls("a.com", paths))
+    suggestions = discover_paths(
+        "a.com", "AI", api_key="K", session=session
+    )
+    assert len(suggestions) == 2
+    assert suggestions[0].count == 2
+    assert suggestions[1].count == 2
+    # tie → 등장 순서 (/alpha 먼저)
+    assert suggestions[0].prefix == "/alpha"
+    assert suggestions[1].prefix == "/beta"

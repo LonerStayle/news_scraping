@@ -66,6 +66,21 @@ class SearchResult:
     keyword: str
 
 
+@dataclass(frozen=True)
+class PathSuggestion:
+    """admin 자동 path 추천 결과 — `discover_paths()` 반환 항목.
+
+    매체 등록 시 사용자가 정확한 path 패턴을 모를 때, Brave 응답 URL 들의
+    첫 segment frequency 를 집계해 추천. 예: openai.com → `/index` 65%
+    (사용자가 직관적으로 입력하는 `/news` 가 아니라 실제 글이 색인된 path).
+    """
+
+    prefix: str  # 예: "/index", "/research"
+    count: int
+    percentage: float  # 0~100. 1 decimal 권장.
+    sample_url: str  # 사용자 검증용 — 추천 prefix 의 첫 URL
+
+
 class HttpSession(Protocol):
     def get(
         self,
@@ -253,3 +268,101 @@ def _matches_path_prefix(url_path: str, prefix: str) -> bool:
 
 def _clamp(value: int, lo: int, hi: int) -> int:
     return max(lo, min(value, hi))
+
+
+def _first_segment(url: str) -> str | None:
+    """URL → 첫 path segment (`"/index"` 형식) 또는 None (root / empty)."""
+    path = urlparse(url).path.strip("/")
+    if not path:
+        return None
+    return "/" + path.split("/")[0].lower()
+
+
+def discover_paths(
+    host: str,
+    keyword: str,
+    *,
+    api_key: str,
+    num: int = 20,
+    freshness: str = "pm",
+    top_n: int = 5,
+    session: HttpSession | None = None,
+) -> list[PathSuggestion]:
+    """Brave 1회 호출로 host 매체의 실제 글 path 패턴 발견.
+
+    옵션 A (HANDOFF.md §12-C) — 사용자가 도메인만 입력해도 admin 이 자동으로
+    실제 글이 색인된 path prefix 추천. 운영 사고 (2026-05-25, 14 매체 active
+    인데 한 매체로 92% 쏠림) 의 근본 해결.
+
+    - Brave 응답 URL 들의 **첫 path segment** frequency 집계
+    - 같은 host 의 row 만 집계 (Brave 가 다른 매체 결과 섞을 수 있음)
+    - 도메인 루트 (`/`) 는 글이 아니라 홈 페이지로 간주 — 집계 무시
+    - sort: count DESC, 등장 순서 (Python dict 보존 + sorted stable)
+    """
+    if not host.strip():
+        raise ValueError("host must be non-empty")
+    if not keyword.strip():
+        raise ValueError("keyword must be non-empty")
+
+    sess: HttpSession = (
+        session if session is not None else cast(HttpSession, requests.Session())
+    )
+    normalized_host = host.lower().removeprefix("www.")
+    params: dict[str, Any] = {
+        "q": build_query(keyword, [normalized_host]),
+        "count": _clamp(num, 1, BRAVE_MAX_COUNT),
+        "freshness": freshness,
+    }
+    headers: dict[str, str] = {
+        "X-Subscription-Token": api_key,
+        "Accept": "application/json",
+    }
+    resp = sess.get(
+        BRAVE_SEARCH_ENDPOINT,
+        params=params,
+        headers=headers,
+        timeout=DEFAULT_TIMEOUT_SECONDS,
+    )
+    resp.raise_for_status()
+    payload: dict[str, Any] = resp.json()
+    items: list[dict[str, Any]] = (payload.get("web") or {}).get("results") or []
+
+    # 첫 segment → (count, first_sample_url) — Python dict 가 등장 순서 보존
+    seg_counts: dict[str, list[Any]] = {}
+    total_host_rows = 0
+    for item in items:
+        link = item.get("url") or ""
+        if not link:
+            continue
+        hostname = str(
+            (item.get("meta_url") or {}).get("hostname") or _domain_of(link)
+        ).lower().removeprefix("www.")
+        if hostname != normalized_host:
+            continue
+        total_host_rows += 1
+        seg = _first_segment(link)
+        if seg is None:
+            continue  # 루트 URL — 글 아님
+        if seg not in seg_counts:
+            seg_counts[seg] = [0, link]
+        seg_counts[seg][0] += 1
+
+    if total_host_rows == 0:
+        return []
+
+    # count DESC, tie 시 등장 순서 (Python sorted 는 stable).
+    sorted_entries = sorted(
+        seg_counts.items(),
+        key=lambda kv: -kv[1][0],
+    )
+    suggestions: list[PathSuggestion] = []
+    for prefix, (count, sample) in sorted_entries[:top_n]:
+        suggestions.append(
+            PathSuggestion(
+                prefix=prefix,
+                count=count,
+                percentage=round(count / total_host_rows * 100, 1),
+                sample_url=str(sample),
+            )
+        )
+    return suggestions
