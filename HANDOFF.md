@@ -1,8 +1,10 @@
 # HANDOFF — 뉴스 스크래핑 (`ai_news_scraping` 폴더)
 
-> 작성일: 2026-05-23 · 최근 갱신: **2026-05-25** · 인계 시점 commit: `d053709` · **320 tests pass**
+> 작성일: 2026-05-23 · 최근 갱신: **2026-05-25 (2회차)** · 인계 시점 commit: `0bb7d86` · **329 tests pass**
 >
 > 📌 서비스명은 **뉴스 스크래핑** 입니다. 폴더 / 패키지명 `ai_news_scraping` 는 첫 use case 가 AI 도메인이라 붙은 historical 이름이며, 도구 자체는 generic (AI 외 도메인도 동일 파이프라인으로 운영 가능 — `domains/<이름>/` 추가만으로).
+
+> **2026-05-25 (2회차) 갱신 요약**: ① 운영 사고 1번 — 메일 결과가 **Anthropic 1개 매체로 92% 쏠리는 편향**. 원인: **사용자 등록 path 가 실제 글 URL 패턴과 불일치** (예: `openai.com/news` 등록인데 실제 글은 `/index/<slug>`). 매체 14개 active 인데 13개 매체 결과 0. ② 해결: cap 권장 공식 강화 (×1.5 → /2 분산 강제), `_looks_like_article_url` 휴리스틱 완화 (`/index` `/blog` 등 일반 글 path 더 통과), search 디버그 로깅 (단계별 reject 카운트). ③ 운영 측 변경 필요 — admin Sources path 수정 또는 호스트만 등록 (§12-C 참조). ④ **다음 세션 작업: 옵션 A — 자동 path 추천** (도메인만 입력하면 Brave 호출로 실제 글 path 자동 검출 + 사용자 추천). ⑤ commits `d053709..0bb7d86` (10개 추가). 320 → 329 tests (+9).
 
 이 문서를 위에서 아래로 한 번 읽으시면 프로젝트의 **무엇·왜·어떻게·어디** 를 다 알 수 있습니다. 다음 인계자가 첫 번째로 읽을 단일 문서.
 
@@ -67,16 +69,17 @@
 
 | 영역 | 상태 |
 |------|------|
-| 코드 산출물 | ✅ Phase A~G + search-path-prefix + admin-send-schedule (T1~T9, 2026-05-25) |
-| 테스트 | ✅ **319 passed** (lint/mypy/pytest 모두 exit 0) |
+| 코드 산출물 | ✅ Phase A~G + search-path-prefix + admin-send-schedule + per-source cap + 권장값 카드 + 휴리스틱 완화 + cron 튜닝 (T1~T15, 2026-05-25 2회차) |
+| 테스트 | ✅ **329 passed** (lint/mypy/pytest 모두 exit 0) |
 | API 키 발급 | ✅ Brave / Gemini / Gmail / Supabase / Admin token |
-| Supabase 마이그레이션 | ⚠️ **확인 필요**: 0001 + 0002 + 0003 + **0004 (admin-send-schedule)** 적용 여부 |
-| Brave site: 422 사고 (5/24) | ✅ 해결 — host-only 임시 (commit `7d85e69`) → 정식 path-prefix 클라이언트 필터 (`0117a93..680eb1a`) |
-| 로컬 dry-run | ✅ 통과 |
+| Supabase 마이그레이션 | ⚠️ **확인 필요**: 0001 + 0002 + 0003 + 0004 + **0005 (per-source cap)** 적용 여부 |
+| Brave site: 422 사고 (5/24) | ✅ 해결 — host-only 임시 + 정식 path-prefix 클라이언트 필터 |
+| GitHub repo + cron | ✅ remote push 됨 (`github.com/LonerStayle/news_scraping`). cron 매 5분 윈도우 활성. 단 secrets 8개 등록 + 첫 수동 trigger 검증은 **`cron-setup-guide.html`** 참조 |
+| 매체 편향 사고 (5/25) | ⚠️ **미해결** — 14 매체 active 인데 Anthropic 1개로 92% 쏠림. 원인: **사용자 등록 path 가 실제 글 URL 과 불일치**. 옵션 A (자동 path 추천) 다음 세션 작업 (§12-C) |
+| admin Sources path 운영 | ⚠️ 사용자가 path 정확히 등록 어려움 (실제 글 URL 패턴 모름). 옵션 A 까진 호스트만 등록 + 휴리스틱 권장 |
+| 디버그 로깅 | ✅ `pipeline.py` + `search.py` 단계별 reject 카운트 (`Brave RAW`, `unknown_host`, `non_article`, `path_mismatch`) — 운영 진단용 |
 | 로컬 실 발송 | ✅ 1회 성공 (대표님 본인 메일 수신 확인) |
-| GitHub Actions cron | ⚠️ **미설정 — 셋업 필요**: secrets 8개 등록 + 마이그레이션 0004 적용 + 수동 트리거 1회. **`cron-setup-guide.html` 의 1~5단계 따라가시면 됩니다.** |
-| admin 시각 변경 (NEW) | ✅ 기능 구현 완료 — admin Settings 탭 마지막 폼 칸 2개 (hour/minute). 마이그레이션 0004 적용 후 동작 |
-| DB row 정리 (5/24 사고 후) | ⚠️ **확인 필요**: 대표님이 SQL Editor 에서 `delete from ai_news.search_sources` 1회 후 admin 재시작 → yaml seed 자동 import 됐는지 |
+| DB row 정리 | 강제발송 후 `truncate ai_news.articles, ai_news.runs restart identity cascade;` 로 리셋 가능 |
 
 ### 대표님 본인 점검 체크리스트 (운영 시작 전)
 
@@ -380,7 +383,10 @@ CLAUDE.md §6 의 두 가지 원칙:
 | 우선순위 | 후보 | 작업량 |
 |---------|------|--------|
 | ~~🔥 ⭐⭐⭐⭐~~ ✅ **완료** | ~~매체 path-prefix 클라이언트 필터~~ — 2026-05-24 구현 완료. commits `T1~T7`. admin Sources 폼에 host 또는 host/path 둘 다 입력 가능. | — |
-| ~~🔥 ⭐⭐⭐⭐~~ ✅ **완료** | ~~admin 에서 발송 시각 변경~~ — 2026-05-25 구현 완료. commits `53f4b38..a3edf23`. admin Settings 탭에서 HH:MM KST 입력. cron 매 5분 sweep + ±2분 윈도우. | — |
+| ~~🔥 ⭐⭐⭐⭐~~ ✅ **완료** | ~~admin 에서 발송 시각 변경~~ — 2026-05-25 구현 완료. commits `53f4b38..a3edf23`. admin Settings 탭에서 HH:MM KST 입력. cron 매 5분 sweep + ±2분 윈도우 (T11 튜닝). | — |
+| ~~🔥 ⭐⭐⭐⭐~~ ✅ **완료** | ~~매체별 cap (per-source cap)~~ — 2026-05-25 구현 (T14). 마이그레이션 0005 + admin Settings "매체당 최대 결과 수" 폼. | — |
+| ~~🔥 ⭐⭐⭐⭐~~ ✅ **완료** | ~~Settings 탭 스마트 권장값~~ — 2026-05-25 구현 (T13). active 키워드/소스 수 기반 자동 계산 카드. 권장 공식 ×1.5 → /2 분산 강제 fix. | — |
+| 🔥 ⭐⭐⭐⭐⭐ **NEXT 세션** | **옵션 A — 자동 path 추천** (§12-C 참조) | 1 PRD 사이클 (~1시간) |
 | ⭐⭐⭐ | runs.scheduled_at 또는 trigger 종류 (cron/admin/manual) 컬럼 추가 | 1 commit |
 | ⭐⭐ | History 탭에서 특정 run 의 article 목록 보기 (drill-down) | 2~3 commit |
 | ⭐⭐ | admin 페이지에 본인 메일 즉시 발송 (test recipient) 기능 | 1 commit |
@@ -415,6 +421,84 @@ CLAUDE.md §6 의 두 가지 원칙:
 | `send_hour=24` (잘못) | admin POST 시 400 reject |
 
 지금 진행할 필요는 없습니다. 필요하면 ralph-loop 또는 `/fast-tasks` 로 다음 batch.
+
+---
+
+### 12-C. 🔥 NEXT 세션 — 옵션 A: 자동 path 추천 (admin Sources)
+
+**왜 필요한가** (2026-05-25 2회차 운영 사고):
+
+대표님이 14 매체 active 등록했지만 메일 결과가 Anthropic 1개 매체로 92% 쏠림. 원인 진단 (search.py 디버그 로깅, commit `0e91d83`):
+
+```
+INFO Brave RAW [OpenAI] 20 items | openai.com=13   ← Brave 는 결과 반환 OK
+INFO   └ path_mismatch openai.com (3): paths=['/index/openai-on-aws/', ...]
+INFO search keyword='OpenAI' → 0 results            ← 우리 코드가 다 잘림
+```
+
+즉 **Brave 는 정상 결과 반환** 하는데 **사용자 등록 path (`/news`) 와 실제 글 URL path (`/index/<slug>`) 가 안 맞아서** 100% 잘림.
+
+| 매체 | 사용자 직관 path | **실제 글 URL path (Brave 색인)** |
+|------|----------------|----------------------------------|
+| OpenAI | `/news` (목록 페이지) | `/index/<slug>/` |
+| Google Blog | `/technology/ai` (카테고리) | `/innovation-and-ai/...`, `/products-and-platforms/...` |
+| DeepMind | `/discover/blog` | `/blog/<slug>` 또는 `/models/<slug>` |
+| Microsoft | `/en-us/research/blog` | `/en-us/security/blog/...`, `/en-us/research/...` 다양 |
+| Anthropic | `/news` | `/news/<slug>` ✅ (우연 일치) |
+| Hugging Face | `/blog` | `/blog/<slug>` ✅ (우연 일치) |
+
+→ "목록 페이지" 와 "글 페이지" URL 패턴이 다른 매체가 다수. 사용자는 직관적으로 목록 URL 입력하지만 Brave 는 글 URL 색인.
+
+**해결 방향 — 옵션 A (자동 path 추천)**:
+
+admin 이 매체 등록 시 Brave 1회 호출 → 결과 path frequency 분석 → 가장 빈번한 prefix 추천. 사용자는 도메인만 알면 OK.
+
+**작동 흐름**:
+
+1. 사용자가 admin Sources 추가 폼에 도메인만 입력 (예: `openai.com`)
+2. "**🔍 자동 path 검출**" 버튼 클릭
+3. admin 백엔드:
+   - Brave Search 호출 (기본 키워드 = active 키워드 중 첫 번째, 또는 "AI" default)
+   - `site:openai.com freshness:pm count:20` 등
+   - 응답 URL 들의 path prefix frequency 분석:
+     - `/index/...` 13건 → 추천 1순위
+     - `/research/...` 3건 → 추천 2순위
+4. admin UI 가 추천 결과 카드로 표시:
+   ```
+   openai.com 에서 발견된 글 path 패턴:
+   ┌────────────────────────────────────┐
+   │ ⭐ /index    (13건, 65%)  [선택]    │
+   │   /research  (3건,  15%) [선택]    │
+   │   /blog      (2건,  10%) [선택]    │
+   │   path 없이 호스트 전체     [선택]   │
+   └────────────────────────────────────┘
+   ```
+5. 사용자가 1개 또는 다중 선택 → 각 선택마다 `source_entries` row 추가
+6. 저장 후 확인 메시지 ("openai.com/index 등록 완료. 다음 발송 시 매칭 보장")
+
+**구현 task 추정** (1 PRD 사이클):
+
+1. **마이그레이션 0006** — `search_sources` 에 `last_path_suggestions jsonb` 컬럼 (선택, 검출 결과 캐시)
+2. **`search.py` helper** — `discover_paths(host, keyword, api_key)` 함수. Brave 호출 + path frequency 집계 + top N prefix 반환
+3. **admin.py 새 라우트** — `POST /admin/sources/discover-paths` (body: domain, optional keyword). discover_paths 호출 결과 JSON 반환
+4. **`templates/admin.html`** — Sources 추가 폼 옆 "🔍 자동 검출" 버튼 + 결과 카드 modal/dropdown
+5. **테스트** — discover_paths 단위 (FakeBraveSession) + admin POST 통합 + AC-1..4 end-to-end
+
+**다음 세션 시작 시점**:
+- 새 PRD 폴더: `docs/features/2026-05-26-source-auto-path-suggest/`
+- `/js-super:brainstorming` 또는 메인 직접 진행 (옵션 1 PRD 흐름)
+
+**임시 대응** (옵션 A 완성 전 운영):
+- admin Sources 에서 path 다 제거 → 호스트만 등록 (예: `openai.com`)
+- 휴리스틱 (`_looks_like_article_url`) 이 카테고리/제품/홈 페이지 자동 차단
+- 2026-05-25 commit `0bb7d86` 으로 휴리스틱 완화 (`/index`, `/blog` 등 일반 글 path 더 통과). 운영 가능
+
+**기대 효과**:
+- 사용자 시행착오 0 — 도메인만 입력
+- 정확도 자동 보장 — Brave 실제 색인 path 기반
+- 매체 다양성 확보 — 14 매체 × cap 3 = 매체별 균형 분포
+
+이게 옵션 A 의 핵심. 다음 세션 첫 task.
 
 ---
 
@@ -489,16 +573,25 @@ CLAUDE.md §6 의 두 가지 원칙:
 | admin-send-schedule: cli.run_command 게이트 위치 (vs pipeline.run 안) | run_store.start_run 호출 전이라 skip 시 runs 테이블 깨끗. force/dry_run bypass 분기도 깔끔. |
 | admin-send-schedule: has_success_today() DB query (vs in-memory / lock file) | cron runner 가 stateless 라 in-memory 무효. 단일 source 는 runs 테이블만. 1 SELECT/run 비용 무시 가능. |
 | admin-send-schedule: KST explicit conversion (vs server TZ 의존) | GitHub Actions runner=UTC 고정. 로컬 개발은 환경별 발산. `ZoneInfo("Asia/Seoul")` 명시로 환경 독립. |
+| T11: cron 매 10분 → 매 5분 + 윈도우 ±5분 → ±2분 (commit `d053709`) | 매 5분 + ±2분 = 한 cycle 에 1 trigger 매칭 → 발송 시각 정확도 ±2분 (매 10분 + ±5분 보다 정확). free tier 18% → 36%, 마진 64% 유지. |
+| T13: 스마트 권장값 카드 (commit `5628b15`) | active 키워드/소스 수 기반 자동 계산 → 사용자 시행착오 ↓. AI 분석 기사 개수 = max(20, kw×5+10), freshness 는 total = kw×src 분기 (pd/pw/pm). |
+| T13.1: 권장 공식 ×1.5 → /2 fix (commit `8a39de4`) | 14 매체에서 ×1.5 → cap 9 → 한 매체 결과 다 통과 = cap 무력. /2 로 변경 → cap 3 → 분산 강제. clamp 2..5. |
+| T14: per-source cap (commit `a450002`) | 한 매체 SEO 편향 자동 방지 — 본문 추출 후 매체별 그룹화 cap. 마이그레이션 0005. 기존 max_articles_for_summary cap 과 같이 작동. 본문 추출 통과 수 (extracted_count) 는 cap 전 의미 유지. |
+| T15: `_looks_like_article_url` 휴리스틱 완화 (commit `0bb7d86`) | `_MIN_LAST_SEGMENT_LEN` 10 → 5. 운영 로그에서 정상 글 다수 차단 (ai.meta=3, nvidia=5 등). `_BLOCKED_PRODUCT_SEGMENTS` 신규 — `/product`, `/events`, `/careers` 등 첫 segment 차단으로 product 페이지는 별도 제어. |
+| 디버그 로깅 (commits `44de4a8`, `0e91d83`) | 사용자 운영 사고 (Anthropic 편향) 진단을 위해 pipeline + search 단계별 reject 카운트 영구 추가. `Brave RAW`, `unknown_host`, `non_article`, `path_mismatch` 4 단계 분리. 진단 비용 0, 운영 가시성 ↑. |
+| 서비스명 generic 화 (commit `888c099`) | "ai_news_scraping" → "뉴스 스크래핑" 사용자 향 표기만 변경. 코드 패키지명 / DB schema 는 그대로 (운영 안전성 우선). |
+| 옵션 A (자동 path 추천) NEXT 세션 결정 | 사용자가 path 정확히 알기 어려운 본질 문제 인지. 운영 측 (path 호스트만 등록) 또는 코드 측 (자동 추천) 중 후자 채택. 사용자 시행착오 0 + 정확도 자동. |
 
 ---
 
 ## 14. 연락처 / 마지막 메모
 
 - **owner**: 대표님 (`dlwlstjq410@gmail.com`)
-- **repo**: (대표님 GitHub 에서 확인)
+- **repo**: `github.com/LonerStayle/news_scraping`
 - **개발 도구**: Claude Code + ralph-loop 플러그인 + js-super skills (PRD → tech-design → plan → execute-plan 자동화 흐름)
-- **개발 기간**: 2026-05-23 하루 (vision-intake → Phase A~G + fast-tasks) + 2026-05-24 (search-path-prefix) + 2026-05-25 (admin-send-schedule)
-- **총 commit 수**: 60+ (linear history, main 브랜치)
+- **개발 기간**: 2026-05-23 하루 (vision-intake → Phase A~G + fast-tasks) + 2026-05-24 (search-path-prefix) + 2026-05-25 (admin-send-schedule, brand, cron tuning, per-source cap, 권장값 카드, 휴리스틱 완화 — 2회차)
+- **총 commit 수**: 70+ (linear history, main 브랜치)
+- **다음 세션 첫 task**: §12-C — 옵션 A (자동 path 추천). PRD 흐름 권장 (search-path-prefix 와 동일 패턴).
 
 ralph 자동 루프로 진행됐기 때문에 모든 commit 메시지가 task 단위로 명확합니다 — `git log --oneline` 으로 진행 history 확인 가능.
 
